@@ -1,0 +1,32 @@
+[tools]
+node = "lts"
+
+# Format tools
+editorconfig-checker = "latest"
+"npm:prettier" = "latest"
+"npm:v8r" = "latest"
+
+# Security tools
+"npm:secretlint" = "latest"
+"npm:@secretlint/secretlint-rule-preset-recommend" = "latest"
+syft = "latest"
+trivy = "latest"
+trufflehog = "latest"
+checkov = "latest"
+# KICS uses official GitHub Action in CI (Docker-based)
+grype = "latest"
+gitleaks = "latest"
+
+[tasks.format]
+description = "Run all formatters"
+run = """
+#!/usr/bin/env bash
+set -e
+echo "Running prettier..."
+prettier --write .
+echo "Running editorconfig-checker..."
+editorconfig-checker
+echo "Running v8r (YAML/JSON validation)..."
+v8r || true
+echo "Format complete!"
+"""
