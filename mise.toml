@@ -17,16 +17,3 @@ checkov = "latest"
 grype = "latest"
 gitleaks = "latest"
 
-[tasks.format]
-description = "Run all formatters"
-run = """
-#!/usr/bin/env bash
-set -e
-echo "Running prettier..."
-prettier --write .
-echo "Running editorconfig-checker..."
-editorconfig-checker
-echo "Running v8r (YAML/JSON validation)..."
-v8r || true
-echo "Format complete!"
-"""
