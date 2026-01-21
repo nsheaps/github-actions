@@ -1,8 +1,8 @@
-name: "Lint with Secretlint"
-description: "Check for secrets using secretlint"
+name: 'Lint with Secretlint'
+description: 'Check for secrets using secretlint'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run secretlint
       shell: bash

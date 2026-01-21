@@ -1,8 +1,8 @@
-name: "Lint with Syft"
-description: "Generate SBOM using syft"
+name: 'Lint with Syft'
+description: 'Generate SBOM using syft'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run syft
       shell: bash

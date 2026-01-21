@@ -1,8 +1,8 @@
-name: "Lint with Gitleaks"
-description: "Check for secrets in git history using gitleaks"
+name: 'Lint with Gitleaks'
+description: 'Check for secrets in git history using gitleaks'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run gitleaks
       shell: bash

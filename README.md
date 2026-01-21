@@ -93,16 +93,16 @@ Read a prompt template file and interpolate environment variables using envsubst
 
 All security linters are designed to run in parallel for comprehensive security scanning.
 
-| Action            | Description                                    |
-| ----------------- | ---------------------------------------------- |
-| `lint-checkov`    | IaC security scanner                           |
-| `lint-gitleaks`   | Secret detection in git history                |
-| `lint-grype`      | Vulnerability scanner                          |
-| `lint-kics`       | Checkmarx IaC scanner (Docker-based)           |
-| `lint-secretlint` | Secret detection using secretlint              |
-| `lint-syft`       | SBOM generation (CycloneDX format)             |
-| `lint-trivy`      | Vulnerability scanner + SBOM generation        |
-| `lint-trufflehog` | Filesystem secret detection                    |
+| Action            | Description                             |
+| ----------------- | --------------------------------------- |
+| `lint-checkov`    | IaC security scanner                    |
+| `lint-gitleaks`   | Secret detection in git history         |
+| `lint-grype`      | Vulnerability scanner                   |
+| `lint-kics`       | Checkmarx IaC scanner (Docker-based)    |
+| `lint-secretlint` | Secret detection using secretlint       |
+| `lint-syft`       | SBOM generation (CycloneDX format)      |
+| `lint-trivy`      | Vulnerability scanner + SBOM generation |
+| `lint-trufflehog` | Filesystem secret detection             |
 
 Example usage with parallel execution:
 
@@ -110,7 +110,7 @@ Example usage with parallel execution:
 - name: Install mise and tools
   uses: jdx/mise-action@v2
   with:
-    install_args: "grype trivy syft gitleaks trufflehog checkov aqua:secretlint/secretlint"
+    install_args: 'grype trivy syft gitleaks trufflehog checkov aqua:secretlint/secretlint'
 
 - name: Run security linters
   uses: qoomon/actions--parallel-steps@v1

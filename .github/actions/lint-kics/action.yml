@@ -1,8 +1,8 @@
-name: "Lint with KICS"
-description: "Run KICS IaC security scanner"
+name: 'Lint with KICS'
+description: 'Run KICS IaC security scanner'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run KICS scan
       shell: bash

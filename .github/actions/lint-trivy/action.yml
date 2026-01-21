@@ -1,8 +1,8 @@
-name: "Lint with Trivy"
-description: "Run trivy vulnerability scanner and generate SBOM"
+name: 'Lint with Trivy'
+description: 'Run trivy vulnerability scanner and generate SBOM'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run trivy filesystem scan
       shell: bash

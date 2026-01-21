@@ -1,8 +1,8 @@
-name: "Lint with Grype"
-description: "Run grype vulnerability scanner"
+name: 'Lint with Grype'
+description: 'Run grype vulnerability scanner'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run grype
       shell: bash

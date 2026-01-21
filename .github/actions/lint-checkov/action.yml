@@ -1,8 +1,8 @@
-name: "Lint with Checkov"
-description: "Run checkov IaC security scanner"
+name: 'Lint with Checkov'
+description: 'Run checkov IaC security scanner'
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Run checkov
       shell: bash

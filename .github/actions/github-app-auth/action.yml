@@ -1,43 +1,43 @@
-name: "GitHub App Authentication"
-description: "Authenticate as a GitHub App and configure git user settings"
+name: 'GitHub App Authentication'
+description: 'Authenticate as a GitHub App and configure git user settings'
 
 branding:
-  icon: "lock"
-  color: "blue"
+  icon: 'lock'
+  color: 'blue'
 
 inputs:
   app-id:
-    description: "GitHub App ID"
+    description: 'GitHub App ID'
     required: true
 
   private-key:
-    description: "GitHub App private key"
+    description: 'GitHub App private key'
     required: true
 
   owner:
-    description: "Repository owner (defaults to current repository owner)"
+    description: 'Repository owner (defaults to current repository owner)'
     required: false
     default: ${{ github.repository_owner }}
 
 outputs:
   token:
-    description: "GitHub App token"
+    description: 'GitHub App token'
     value: ${{ steps.app-token.outputs.token }}
 
   app-slug:
-    description: "GitHub App slug name"
+    description: 'GitHub App slug name'
     value: ${{ steps.app-token.outputs.app-slug }}
 
   user-id:
-    description: "GitHub App bot user ID"
+    description: 'GitHub App bot user ID'
     value: ${{ steps.get-user-id.outputs.user-id }}
 
   user-name:
-    description: "GitHub App bot user name (app slug with [bot] suffix)"
+    description: 'GitHub App bot user name (app slug with [bot] suffix)'
     value: ${{ steps.get-user-id.outputs.user-name }}
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Generate GitHub App token
       id: app-token
