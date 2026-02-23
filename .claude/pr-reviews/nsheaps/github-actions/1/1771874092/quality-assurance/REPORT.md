@@ -11,6 +11,7 @@ This action demonstrates a solid understanding of the Arcane API workflow and fo
 **Critical: `sync_name_from_path` produces collisions for deeply nested paths (lines 111-127)**
 
 The naming logic uses only `basename` of the parent directory. Given these files:
+
 - `stacks/web/frontend/compose.yml` -> name: `prefix-frontend`
 - `stacks/api/frontend/compose.yml` -> name: `prefix-frontend`
 
@@ -59,6 +60,7 @@ API calls can fail due to transient network issues, rate limiting, or server err
 The `|| true` after curl means that if curl itself fails (DNS resolution failure, connection refused, etc.), `http_code` will be empty or `000`. The subsequent `[[ "${http_code}" -ge 400 ]]` comparison will treat empty/000 as success (since `000 -ge 400` is false), and the function will `cat` an empty temp file and return success with empty output. Downstream `jq` calls on this empty output will then fail with parse errors, producing confusing error messages that do not point to the actual network failure.
 
 A fix would be:
+
 ```bash
 if [[ -z "${http_code}" || "${http_code}" == "000" ]]; then
   log_error "API ${method} ${path} failed (connection error)"

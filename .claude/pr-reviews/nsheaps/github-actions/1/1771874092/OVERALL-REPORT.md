@@ -2,17 +2,17 @@
 
 ## Score Summary
 
-| Category | Score | Status |
-|---|---|---|
-| Simplicity | 42/100 | :rotating_light: |
-| Flexibility | 62/100 | :rotating_light: |
-| Usability | 72/100 | :warning: |
-| Documentation | 82/100 | :warning: |
-| Security | 52/100 | :rotating_light: |
-| Patterns | 62/100 | :rotating_light: |
-| Best Practices | 86/100 | :white_check_mark: |
-| Quality Assurance | 52/100 | :rotating_light: |
-| **Overall** | **64/100** | :rotating_light: |
+| Category          | Score      | Status             |
+| ----------------- | ---------- | ------------------ |
+| Simplicity        | 42/100     | :rotating_light:   |
+| Flexibility       | 62/100     | :rotating_light:   |
+| Usability         | 72/100     | :warning:          |
+| Documentation     | 82/100     | :warning:          |
+| Security          | 52/100     | :rotating_light:   |
+| Patterns          | 62/100     | :rotating_light:   |
+| Best Practices    | 86/100     | :white_check_mark: |
+| Quality Assurance | 52/100     | :rotating_light:   |
+| **Overall**       | **64/100** | :rotating_light:   |
 
 ## Executive Summary
 
@@ -56,6 +56,7 @@ However, the action has significant issues across multiple dimensions that warra
 ## Detailed Category Reports
 
 Individual detailed reports are available in:
+
 - [Simplicity](./simplicity/REPORT.md)
 - [Flexibility](./flexibility/REPORT.md)
 - [Usability](./usability/REPORT.md)
