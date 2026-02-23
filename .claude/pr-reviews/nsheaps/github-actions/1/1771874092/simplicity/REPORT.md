@@ -11,6 +11,7 @@ The arcane-deploy action is a moderately over-engineered bash script that tries 
 The action defines 15 inputs in `action.yml` (lines 9-84). Compare this to the existing actions in the repo: `claude-auth` has 12 inputs but supports three entirely different secret providers (Doppler, 1Password, raw), and `interpolate-prompt` has 1 input. For a single deployment target (Arcane), 15 inputs is a lot. Many of these have sensible defaults derived from GitHub context, which is good, but the sheer count creates a wide surface area that users need to understand.
 
 Inputs that add questionable value:
+
 - **`sync-name-prefix`** (`action.yml:75-78`): A naming customization that could simply default to the repo name with no override needed for the common case.
 - **`sync-interval`** (`action.yml:66-68`): Exposing polling interval at the action level is a deployment concern that most users will never change from the default of 5 minutes.
 - **`env-vars`** (`action.yml:80-84`): This input writes KEY=VALUE pairs into `$GITHUB_ENV` (see `action.sh:260-278`). This is a workflow-level concern, not a deployment concern. Users can already set environment variables using the native `env:` key in their workflow YAML. Bundling this into the action conflates responsibilities.
@@ -60,12 +61,12 @@ The action README (`README.md`) is well-structured with clear usage examples for
 
 ### Comparison Summary
 
-| Metric | `arcane-deploy` | `claude-auth` | `interpolate-prompt` | `lint-trivy` |
-|--------|-----------------|---------------|----------------------|--------------|
-| Inputs | 15 | 12 | 1 | 0 |
-| Script lines | 345 | 196 | (inline, 18) | (inline, 8) |
-| Functions | 7 | 5 | 0 | 0 |
-| External deps | curl, jq, find | curl, doppler, op | envsubst | trivy |
+| Metric        | `arcane-deploy` | `claude-auth`     | `interpolate-prompt` | `lint-trivy` |
+| ------------- | --------------- | ----------------- | -------------------- | ------------ |
+| Inputs        | 15              | 12                | 1                    | 0            |
+| Script lines  | 345             | 196               | (inline, 18)         | (inline, 8)  |
+| Functions     | 7               | 5                 | 0                    | 0            |
+| External deps | curl, jq, find  | curl, doppler, op | envsubst             | trivy        |
 
 The arcane-deploy action is roughly 2x the complexity of claude-auth while solving a narrower problem (one platform vs. three providers). This ratio suggests there is room for simplification.
 
