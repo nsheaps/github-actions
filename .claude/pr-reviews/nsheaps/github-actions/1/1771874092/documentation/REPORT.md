@@ -100,15 +100,15 @@ This PR delivers strong, well-structured documentation that significantly exceed
 
 ### Summary of Deductions
 
-| Category | Deduction | Reason |
-|----------|-----------|--------|
-| Missing troubleshooting/error docs | -5 | No guidance on common failure modes |
-| Missing prerequisites | -2 | No runner/dependency requirements noted |
-| Incomplete edge-case docs | -4 | maxdepth 2 limit, root-path sync naming, never-deletes implications |
-| env-vars behavior mismatch | -2 | README implies compose-level injection, script does GITHUB_ENV export |
-| auth-type values underdocumented | -2 | No explanation of what each auth type requires |
-| Missing function docstrings | -2 | `discover_compose_files` and `export_env_vars` lack docstrings |
-| Minor inline comment gaps | -1 | `|| true` on curl, `sort -z` rationale |
+| Category                           | Deduction | Reason                                                                |
+| ---------------------------------- | --------- | --------------------------------------------------------------------- | --- | -------------------------------- |
+| Missing troubleshooting/error docs | -5        | No guidance on common failure modes                                   |
+| Missing prerequisites              | -2        | No runner/dependency requirements noted                               |
+| Incomplete edge-case docs          | -4        | maxdepth 2 limit, root-path sync naming, never-deletes implications   |
+| env-vars behavior mismatch         | -2        | README implies compose-level injection, script does GITHUB_ENV export |
+| auth-type values underdocumented   | -2        | No explanation of what each auth type requires                        |
+| Missing function docstrings        | -2        | `discover_compose_files` and `export_env_vars` lack docstrings        |
+| Minor inline comment gaps          | -1        | `                                                                     |     | true`on curl,`sort -z` rationale |
 
 ## References
 

@@ -94,14 +94,14 @@ The `arcane-deploy` action follows many of the repo's structural conventions -- 
 
 ## References
 
-| File | Role | Key Lines |
-|------|------|-----------|
-| `/home/user/github-actions/.github/actions/arcane-deploy/action.sh` | New action script | L2 (`set -euo pipefail`), L5-19 (config), L26-32 (logging), L37-64 (API helper), L307 (mask), L340-342 (outputs) |
-| `/home/user/github-actions/.github/actions/arcane-deploy/action.yml` | New action definition | L1-7 (metadata+branding), L9-84 (inputs), L86-97 (outputs), L99-121 (runs+env mapping) |
-| `/home/user/github-actions/.github/actions/arcane-deploy/README.md` | New action docs | Only action with a dedicated README |
-| `/home/user/github-actions/.github/actions/claude-auth/action.sh` | Existing comparable script | L2 (`set -e`), L5-8 (colors), L11-21 (logging with colors), L24-41 (helpers), 4-space indent |
-| `/home/user/github-actions/.github/actions/claude-auth/action.yml` | Existing comparable action.yml | L1-6 (metadata+branding), L9-69 (inputs), L71-74 (outputs), L76-96 (runs+env mapping) |
-| `/home/user/github-actions/.github/actions/claude-debug/action.yml` | Existing action with inline script | L79-222 (inline bash with `set_output()`, `::group::`) |
-| `/home/user/github-actions/.github/actions/interpolate-prompt/action.yml` | Existing action | L29 (`::error::` usage) |
-| `/home/user/github-actions/.github/actions/github-app-auth/action.yml` | Existing action (no shell script) | L1-2 (metadata without `author`), L7-8 (branding) |
-| `/home/user/github-actions/README.md` | Root docs | L92-107 (arcane-deploy section with link to action README) |
+| File                                                                      | Role                               | Key Lines                                                                                                        |
+| ------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `/home/user/github-actions/.github/actions/arcane-deploy/action.sh`       | New action script                  | L2 (`set -euo pipefail`), L5-19 (config), L26-32 (logging), L37-64 (API helper), L307 (mask), L340-342 (outputs) |
+| `/home/user/github-actions/.github/actions/arcane-deploy/action.yml`      | New action definition              | L1-7 (metadata+branding), L9-84 (inputs), L86-97 (outputs), L99-121 (runs+env mapping)                           |
+| `/home/user/github-actions/.github/actions/arcane-deploy/README.md`       | New action docs                    | Only action with a dedicated README                                                                              |
+| `/home/user/github-actions/.github/actions/claude-auth/action.sh`         | Existing comparable script         | L2 (`set -e`), L5-8 (colors), L11-21 (logging with colors), L24-41 (helpers), 4-space indent                     |
+| `/home/user/github-actions/.github/actions/claude-auth/action.yml`        | Existing comparable action.yml     | L1-6 (metadata+branding), L9-69 (inputs), L71-74 (outputs), L76-96 (runs+env mapping)                            |
+| `/home/user/github-actions/.github/actions/claude-debug/action.yml`       | Existing action with inline script | L79-222 (inline bash with `set_output()`, `::group::`)                                                           |
+| `/home/user/github-actions/.github/actions/interpolate-prompt/action.yml` | Existing action                    | L29 (`::error::` usage)                                                                                          |
+| `/home/user/github-actions/.github/actions/github-app-auth/action.yml`    | Existing action (no shell script)  | L1-2 (metadata without `author`), L7-8 (branding)                                                                |
+| `/home/user/github-actions/README.md`                                     | Root docs                          | L92-107 (arcane-deploy section with link to action README)                                                       |
