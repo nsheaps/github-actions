@@ -81,11 +81,11 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
 
 ## Outputs
 
-| Output          | Description                       |
-| --------------- | --------------------------------- |
-| `syncs-created` | Number of new syncs created       |
-| `syncs-updated` | Number of existing syncs updated  |
-| `repository-id` | Arcane git repository ID used     |
+| Output          | Description                      |
+| --------------- | -------------------------------- |
+| `syncs-created` | Number of new syncs created      |
+| `syncs-updated` | Number of existing syncs updated |
+| `repository-id` | Arcane git repository ID used    |
 
 ## How It Works
 
