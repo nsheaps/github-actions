@@ -89,6 +89,93 @@ Read a prompt template file and interpolate environment variables using envsubst
   run: echo "${{ steps.prompt.outputs.prompt }}"
 ```
 
+### Deployment Actions
+
+#### `arcane-deploy`
+
+Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane) via GitOps sync. Automatically discovers compose files and creates or updates syncs in Arcane — no manual git sync setup required.
+
+**Features:**
+
+- Auto-discover compose files from a directory
+- Explicit compose file list for full control
+- Creates the git repository in Arcane if it doesn't exist
+- Creates or updates gitops syncs (never deletes)
+- Shared environment variables across stacks
+- Triggers immediate sync after changes
+
+**Directory scan** — automatically finds compose files in a directory:
+
+```yaml
+- name: Deploy stacks to Arcane
+  uses: nsheaps/github-actions/.github/actions/arcane-deploy@main
+  with:
+    arcane-url: ${{ secrets.ARCANE_URL }}
+    arcane-api-key: ${{ secrets.ARCANE_API_KEY }}
+    environment-id: '1'
+    compose-dir: stacks
+    git-token: ${{ secrets.REPO_TOKEN }}
+```
+
+**Explicit file list** — deploy specific compose files:
+
+```yaml
+- name: Deploy stacks to Arcane
+  uses: nsheaps/github-actions/.github/actions/arcane-deploy@main
+  with:
+    arcane-url: ${{ secrets.ARCANE_URL }}
+    arcane-api-key: ${{ secrets.ARCANE_API_KEY }}
+    environment-id: '1'
+    compose-files: |
+      services/web/compose.yml
+      services/api/compose.yml
+      services/db/compose.yml
+    git-token: ${{ secrets.REPO_TOKEN }}
+```
+
+**With shared environment variables:**
+
+```yaml
+- name: Deploy stacks to Arcane
+  uses: nsheaps/github-actions/.github/actions/arcane-deploy@main
+  with:
+    arcane-url: ${{ secrets.ARCANE_URL }}
+    arcane-api-key: ${{ secrets.ARCANE_API_KEY }}
+    environment-id: '1'
+    compose-dir: stacks
+    git-token: ${{ secrets.REPO_TOKEN }}
+    env-vars: |
+      DOMAIN=example.com
+      NETWORK=traefik
+      TZ=America/New_York
+```
+
+**Inputs:**
+
+| Input              | Required | Default               | Description                                             |
+| ------------------ | -------- | --------------------- | ------------------------------------------------------- |
+| `arcane-url`       | Yes      |                       | Base URL of the Arcane instance                         |
+| `arcane-api-key`   | Yes      |                       | API key (from Arcane Settings > API Keys)               |
+| `environment-id`   | Yes      |                       | Arcane environment ID                                   |
+| `compose-dir`      | No       |                       | Directory to scan for compose files                     |
+| `compose-files`    | No       |                       | Newline-separated list of compose file paths            |
+| `repository-url`   | No       | GitHub repo HTTPS URL | Git URL for Arcane to clone                             |
+| `repository-name`  | No       | GitHub repo name      | Display name in Arcane                                  |
+| `branch`           | No       | Triggering branch     | Branch to sync from                                     |
+| `auth-type`        | No       | `http`                | Git auth type: `none`, `http`, or `ssh`                 |
+| `git-token`        | No       |                       | Token for HTTP git authentication                       |
+| `auto-sync`        | No       | `true`                | Enable Arcane auto-sync polling                         |
+| `sync-interval`    | No       | `5`                   | Minutes between auto-sync polls                         |
+| `trigger-sync`     | No       | `true`                | Trigger immediate sync after create/update              |
+| `sync-name-prefix` | No       | GitHub repo name      | Prefix for sync names in Arcane                         |
+| `env-vars`         | No       |                       | Shared env vars (`KEY=VALUE` per line) for the workflow |
+
+**Outputs:**
+
+- `syncs-created` — Number of new syncs created
+- `syncs-updated` — Number of existing syncs updated
+- `repository-id` — Arcane git repository ID used
+
 ### Security Linter Actions
 
 All security linters are designed to run in parallel for comprehensive security scanning.

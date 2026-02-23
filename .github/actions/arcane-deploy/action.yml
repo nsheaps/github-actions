@@ -1,0 +1,121 @@
+name: 'Arcane Docker Compose Deploy'
+description: 'Deploy Docker Compose stacks to Arcane via GitOps sync. Discovers compose files and creates/updates syncs automatically.'
+author: 'nsheaps'
+
+branding:
+  icon: 'upload-cloud'
+  color: 'purple'
+
+inputs:
+  arcane-url:
+    description: 'Base URL of the Arcane instance (e.g. https://arcane.example.com)'
+    required: true
+
+  arcane-api-key:
+    description: 'API key for Arcane authentication (from Settings > API Keys)'
+    required: true
+
+  environment-id:
+    description: 'Arcane environment ID to deploy to'
+    required: true
+
+  # Compose file discovery
+  compose-dir:
+    description: 'Directory to scan for compose files (relative to repo root). Files matching compose.y[a]ml or docker-compose.y[a]ml are auto-discovered.'
+    required: false
+    default: ''
+
+  compose-files:
+    description: 'Newline-separated list of compose file paths (relative to repo root). Use this for explicit control instead of directory scanning.'
+    required: false
+    default: ''
+
+  # Git repository configuration
+  repository-url:
+    description: 'Git repository URL for Arcane to clone. Defaults to the current GitHub repository HTTPS URL.'
+    required: false
+    default: ''
+
+  repository-name:
+    description: 'Name for the repository in Arcane. Defaults to the GitHub repository name.'
+    required: false
+    default: ''
+
+  branch:
+    description: 'Branch to sync from. Defaults to the branch that triggered the workflow.'
+    required: false
+    default: ''
+
+  auth-type:
+    description: 'Git authentication type: none, http, or ssh'
+    required: false
+    default: 'http'
+
+  git-token:
+    description: 'Token for HTTP git authentication. Required when auth-type is http.'
+    required: false
+    default: ''
+
+  # Sync behavior
+  auto-sync:
+    description: 'Enable auto-sync polling in Arcane so it periodically pulls changes'
+    required: false
+    default: 'true'
+
+  sync-interval:
+    description: 'Minutes between auto-sync polls'
+    required: false
+    default: '5'
+
+  trigger-sync:
+    description: 'Trigger an immediate sync after creating or updating each stack'
+    required: false
+    default: 'true'
+
+  sync-name-prefix:
+    description: 'Prefix for sync names in Arcane. Defaults to the GitHub repository name.'
+    required: false
+    default: ''
+
+  # Shared environment variables
+  env-vars:
+    description: 'Shared environment variables (KEY=VALUE per line) to export for the workflow. Use these in your compose files via variable interpolation or .env files in your repo.'
+    required: false
+    default: ''
+
+outputs:
+  syncs-created:
+    description: 'Number of new syncs created'
+    value: ${{ steps.deploy.outputs.syncs-created }}
+
+  syncs-updated:
+    description: 'Number of existing syncs updated'
+    value: ${{ steps.deploy.outputs.syncs-updated }}
+
+  repository-id:
+    description: 'Arcane git repository ID used'
+    value: ${{ steps.deploy.outputs.repository-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy to Arcane
+      id: deploy
+      shell: bash
+      run: ${{ github.action_path }}/action.sh
+      env:
+        INPUT_ARCANE_URL: ${{ inputs.arcane-url }}
+        INPUT_ARCANE_API_KEY: ${{ inputs.arcane-api-key }}
+        INPUT_ENVIRONMENT_ID: ${{ inputs.environment-id }}
+        INPUT_COMPOSE_DIR: ${{ inputs.compose-dir }}
+        INPUT_COMPOSE_FILES: ${{ inputs.compose-files }}
+        INPUT_REPOSITORY_URL: ${{ inputs.repository-url }}
+        INPUT_REPOSITORY_NAME: ${{ inputs.repository-name }}
+        INPUT_BRANCH: ${{ inputs.branch }}
+        INPUT_AUTH_TYPE: ${{ inputs.auth-type }}
+        INPUT_GIT_TOKEN: ${{ inputs.git-token }}
+        INPUT_AUTO_SYNC: ${{ inputs.auto-sync }}
+        INPUT_SYNC_INTERVAL: ${{ inputs.sync-interval }}
+        INPUT_TRIGGER_SYNC: ${{ inputs.trigger-sync }}
+        INPUT_SYNC_NAME_PREFIX: ${{ inputs.sync-name-prefix }}
+        INPUT_ENV_VARS: ${{ inputs.env-vars }}
