@@ -71,8 +71,13 @@ runs:
         if ! command -v yq &> /dev/null; then
           echo "::group::Installing yq"
           YQ_VERSION="v4.44.1"
-          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq
-          chmod +x /usr/local/bin/yq
+          YQ_SHA256="6dc2d0cd4e0caca5aeffd0d784a48263591080e4a0895abe69f3a76eb50d1ba3"
+          YQ_INSTALL_DIR="${RUNNER_TEMP:-/tmp}/yq-bin"
+          mkdir -p "$YQ_INSTALL_DIR"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o "$YQ_INSTALL_DIR/yq"
+          echo "$YQ_SHA256  $YQ_INSTALL_DIR/yq" | sha256sum -c
+          chmod +x "$YQ_INSTALL_DIR/yq"
+          export PATH="$YQ_INSTALL_DIR:$PATH"
           echo "::endgroup::"
         fi
 
@@ -88,14 +93,14 @@ runs:
           echo "::group::Secret: $name (source: ${source:0:20}..., $target_count targets)"
 
           # Read secret from 1Password
-          value=$(op read "$source" 2>&1) || {
+          value=$(op read "$source") || {
             echo "::error::Failed to read secret '$name' from $source"
             errors=$((errors + 1))
             echo "::endgroup::"
             continue
           }
 
-          # Mask the value in logs
+          # Mask the value in logs immediately after reading
           echo "::add-mask::$value"
           echo "Successfully read secret '$name' from 1Password"
 
