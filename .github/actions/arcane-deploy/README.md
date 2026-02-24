@@ -8,7 +8,7 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
 - Explicit compose file list for full control
 - Creates the git repository in Arcane if it doesn't exist
 - Creates or updates gitops syncs (never deletes)
-- Shared environment variables across stacks
+- Workflow environment variables for subsequent steps
 - Triggers immediate sync after changes
 
 ## Usage
@@ -42,7 +42,7 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
     git-token: ${{ secrets.REPO_TOKEN }}
 ```
 
-**With shared environment variables:**
+**With workflow environment variables** (available to subsequent steps, not inside containers):
 
 ```yaml
 - name: Deploy stacks to Arcane
@@ -71,13 +71,13 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
 | `repository-url`   | No       | GitHub repo HTTPS URL | Git URL for Arcane to clone                             |
 | `repository-name`  | No       | GitHub repo name      | Display name in Arcane                                  |
 | `branch`           | No       | Triggering branch     | Branch to sync from                                     |
-| `auth-type`        | No       | `http`                | Git auth type: `none`, `http`, or `ssh`                 |
-| `git-token`        | No       |                       | Token for HTTP git authentication                       |
+| `auth-type`        | No       | `http`                | Git auth type: `none` or `http`                         |
+| `git-token`        | No       |                       | Token for HTTP git auth. Required when auth-type=http.  |
 | `auto-sync`        | No       | `true`                | Enable Arcane auto-sync polling                         |
 | `sync-interval`    | No       | `5`                   | Minutes between auto-sync polls                         |
 | `trigger-sync`     | No       | `true`                | Trigger immediate sync after create/update              |
 | `sync-name-prefix` | No       | GitHub repo name      | Prefix for sync names in Arcane                         |
-| `env-vars`         | No       |                       | Shared env vars (`KEY=VALUE` per line) for the workflow |
+| `env-vars`         | No       |                       | Runner env vars (`KEY=VALUE` per line) for subsequent steps. Values are masked. |
 
 ## Outputs
 

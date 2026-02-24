@@ -47,12 +47,12 @@ inputs:
     default: ''
 
   auth-type:
-    description: 'Git authentication type: none, http, or ssh'
+    description: 'Git authentication type: none or http'
     required: false
     default: 'http'
 
   git-token:
-    description: 'Token for HTTP git authentication. Required when auth-type is http.'
+    description: 'Token for HTTP git authentication. Required when auth-type is http (the default).'
     required: false
     default: ''
 
@@ -77,9 +77,9 @@ inputs:
     required: false
     default: ''
 
-  # Shared environment variables
+  # Workflow environment variables
   env-vars:
-    description: 'Shared environment variables (KEY=VALUE per line) to export for the workflow. Use these in your compose files via variable interpolation or .env files in your repo.'
+    description: 'Environment variables (KEY=VALUE per line) to export to the GitHub Actions runner via $GITHUB_ENV. These are available to subsequent workflow steps, NOT inside deployed containers. Values are automatically masked in logs.'
     required: false
     default: ''
 

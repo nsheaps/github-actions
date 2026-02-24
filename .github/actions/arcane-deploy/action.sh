@@ -18,17 +18,39 @@ TRIGGER_SYNC="${INPUT_TRIGGER_SYNC:-true}"
 ENV_VARS="${INPUT_ENV_VARS:-}"
 SYNC_NAME_PREFIX="${INPUT_SYNC_NAME_PREFIX:-${GITHUB_REPOSITORY##*/}}"
 
+# [C1/C2] Mask secrets immediately, before any logging or API calls
+[[ -n "${API_KEY}" ]] && echo "::add-mask::${API_KEY}"
+[[ -n "${GIT_TOKEN}" ]] && echo "::add-mask::${GIT_TOKEN}"
+
 SYNCS_CREATED=0
 SYNCS_UPDATED=0
 REPOSITORY_ID=""
 
-# --- Logging ---
+# --- Helpers ---
+
 log_info() {
   echo "[Arcane Deploy] $1"
 }
 
 log_error() {
   echo "::error::[Arcane Deploy] $1"
+}
+
+# Trim leading and trailing whitespace from a string.
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  echo "$s"
+}
+
+# Validate a required input is non-empty.
+require_input() {
+  local name="$1" value="$2"
+  if [[ -z "${value}" ]]; then
+    log_error "${name} is required"
+    exit 1
+  fi
 }
 
 # --- API Helper ---
@@ -44,13 +66,26 @@ arcane_api() {
   tmp_body=$(mktemp)
 
   local http_code
+  # [H2] Capture curl exit code separately to detect transport failures
   http_code=$(curl -s -w "%{http_code}" \
+    --max-time 30 --connect-timeout 10 \
     -X "${method}" \
     -H "X-Api-Key: ${API_KEY}" \
     -H "Content-Type: application/json" \
     -o "${tmp_body}" \
     "$@" \
-    "${url}") || true
+    "${url}") || {
+    log_error "API ${method} ${path} failed: curl transport error (DNS, timeout, or connection refused)"
+    rm -f "${tmp_body}"
+    return 1
+  }
+
+  # [H2] Guard against empty http_code (should not happen after above, but be safe)
+  if [[ -z "${http_code}" ]]; then
+    log_error "API ${method} ${path} failed: no HTTP response code received"
+    rm -f "${tmp_body}"
+    return 1
+  fi
 
   if [[ "${http_code}" -ge 400 ]]; then
     log_error "API ${method} ${path} failed (HTTP ${http_code})"
@@ -63,6 +98,23 @@ arcane_api() {
   rm -f "${tmp_body}"
 }
 
+# [H7] Extract a jq field and validate it is non-empty and non-"null".
+# Usage: jq_extract_id JSON_STRING JQ_FILTER CONTEXT_MSG
+# Returns the extracted value on stdout, or returns 1 on failure.
+jq_extract_id() {
+  local json="$1" filter="$2" context="$3"
+  local value
+  value=$(echo "${json}" | jq -r "${filter}" 2>/dev/null) || {
+    log_error "${context}: failed to parse API response as JSON"
+    return 1
+  }
+  if [[ -z "${value}" || "${value}" == "null" ]]; then
+    log_error "${context}: expected a valid ID but got '${value}'"
+    return 1
+  fi
+  echo "${value}"
+}
+
 # --- Compose File Discovery ---
 discover_compose_files() {
   local files=()
@@ -70,8 +122,7 @@ discover_compose_files() {
   # From explicit list
   if [[ -n "${COMPOSE_FILES_INPUT}" ]]; then
     while IFS= read -r file; do
-      file="${file#"${file%%[![:space:]]*}"}" # trim leading
-      file="${file%"${file##*[![:space:]]}"}" # trim trailing
+      file="$(trim "${file}")"
       [[ -z "${file}" ]] && continue
       files+=("${file}")
     done <<< "${COMPOSE_FILES_INPUT}"
@@ -118,6 +169,7 @@ sync_name_from_path() {
     name="${SYNC_NAME_PREFIX}"
   else
     name=$(basename "${dir}")
+    # Avoid "prefix-prefix" when the directory name matches the prefix
     if [[ "${name}" != "${SYNC_NAME_PREFIX}" ]]; then
       name="${SYNC_NAME_PREFIX}-${name}"
     fi
@@ -139,7 +191,7 @@ ensure_repository() {
     --arg url "${REPO_URL}" \
     '[.[] | select(.url == $url)] | first // empty | .id')
 
-  if [[ -n "${REPOSITORY_ID}" ]]; then
+  if [[ -n "${REPOSITORY_ID}" && "${REPOSITORY_ID}" != "null" ]]; then
     log_info "Found existing repository: ${REPOSITORY_ID}"
 
     # Update credentials so the token stays current
@@ -167,7 +219,8 @@ ensure_repository() {
     local result
     result=$(arcane_api POST "/customize/git-repositories" -d "${create_payload}")
 
-    REPOSITORY_ID=$(echo "${result}" | jq -r '.id')
+    # [H7] Validate the response contains a real ID
+    REPOSITORY_ID=$(jq_extract_id "${result}" '.id' "create repository")
     log_info "Created repository: ${REPOSITORY_ID}"
   fi
 
@@ -188,10 +241,8 @@ upsert_sync() {
     --arg repoId "${REPOSITORY_ID}" \
     '[.[] | select(.composePath == $composePath and .repositoryId == $repoId)] | first // empty | .id')
 
-  local auto_sync_val="false"
-  [[ "${AUTO_SYNC}" == "true" ]] && auto_sync_val="true"
-
-  if [[ -n "${existing_id}" ]]; then
+  local sync_id
+  if [[ -n "${existing_id}" && "${existing_id}" != "null" ]]; then
     log_info "  Updating sync ${existing_id} (${sync_name})"
 
     local update_payload
@@ -199,7 +250,7 @@ upsert_sync() {
       --arg name "${sync_name}" \
       --arg branch "${BRANCH}" \
       --arg composePath "${compose_path}" \
-      --argjson autoSync "${auto_sync_val}" \
+      --argjson autoSync "${AUTO_SYNC}" \
       --argjson syncInterval "${SYNC_INTERVAL}" \
       '{
         name: $name,
@@ -213,11 +264,7 @@ upsert_sync() {
       -d "${update_payload}" > /dev/null
 
     SYNCS_UPDATED=$((SYNCS_UPDATED + 1))
-
-    if [[ "${TRIGGER_SYNC}" == "true" ]]; then
-      log_info "  Triggering sync..."
-      arcane_api POST "/environments/${ENV_ID}/gitops-syncs/${existing_id}/sync" > /dev/null || true
-    fi
+    sync_id="${existing_id}"
   else
     log_info "  Creating sync: ${sync_name}"
 
@@ -228,7 +275,7 @@ upsert_sync() {
       --arg branch "${BRANCH}" \
       --arg composePath "${compose_path}" \
       --arg projectName "${sync_name}" \
-      --argjson autoSync "${auto_sync_val}" \
+      --argjson autoSync "${AUTO_SYNC}" \
       --argjson syncInterval "${SYNC_INTERVAL}" \
       '{
         name: $name,
@@ -243,34 +290,53 @@ upsert_sync() {
     local result
     result=$(arcane_api POST "/environments/${ENV_ID}/gitops-syncs" -d "${create_payload}")
 
-    local new_id
-    new_id=$(echo "${result}" | jq -r '.id')
-    log_info "  Created sync: ${new_id}"
+    # [H7] Validate the response contains a real ID
+    sync_id=$(jq_extract_id "${result}" '.id' "create sync '${sync_name}'")
+    log_info "  Created sync: ${sync_id}"
 
     SYNCS_CREATED=$((SYNCS_CREATED + 1))
+  fi
 
-    if [[ "${TRIGGER_SYNC}" == "true" ]]; then
-      log_info "  Triggering sync..."
-      arcane_api POST "/environments/${ENV_ID}/gitops-syncs/${new_id}/sync" > /dev/null || true
-    fi
+  # Deduplicated trigger-sync (was duplicated in both branches)
+  if [[ "${TRIGGER_SYNC}" == "true" ]]; then
+    log_info "  Triggering sync..."
+    arcane_api POST "/environments/${ENV_ID}/gitops-syncs/${sync_id}/sync" > /dev/null || true
   fi
 }
 
 # --- Environment Variables ---
+# Export variables to the GitHub Actions runner environment ($GITHUB_ENV).
+# NOTE: These are CI workflow-scoped variables, NOT Arcane deployment-time variables.
+# They are available to subsequent workflow steps, not inside deployed containers.
 export_env_vars() {
   if [[ -z "${ENV_VARS}" ]]; then
     return
   fi
 
-  echo "::group::Setting shared environment variables"
+  echo "::group::Setting workflow environment variables"
   while IFS= read -r line; do
-    line="${line#"${line%%[![:space:]]*}"}" # trim leading
-    line="${line%"${line##*[![:space:]]}"}" # trim trailing
+    line="$(trim "${line}")"
     [[ -z "${line}" ]] && continue
     [[ "${line}" == \#* ]] && continue
 
     local key="${line%%=*}"
     local value="${line#*=}"
+
+    # [H1] Validate key format to prevent env injection via malformed keys
+    if [[ ! "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      log_error "Invalid env-var key: '${key}' (must match [A-Za-z_][A-Za-z0-9_]*)"
+      exit 1
+    fi
+
+    # [H1] Reject embedded newlines in values to prevent env injection
+    if [[ "${value}" == *$'\n'* ]]; then
+      log_error "Invalid env-var value for '${key}': embedded newlines are not allowed"
+      exit 1
+    fi
+
+    # [H1] Mask the value so it does not appear in logs of subsequent steps
+    echo "::add-mask::${value}"
+
     log_info "  ${key}=***"
     echo "${key}=${value}" >> "${GITHUB_ENV}"
   done <<< "${ENV_VARS}"
@@ -286,25 +352,32 @@ log_info "Repository: ${REPO_URL}"
 log_info "Branch: ${BRANCH}"
 
 # Validate required inputs
-if [[ -z "${ARCANE_URL}" ]]; then
-  log_error "arcane-url is required"
-  exit 1
-fi
-if [[ -z "${API_KEY}" ]]; then
-  log_error "arcane-api-key is required"
-  exit 1
-fi
-if [[ -z "${ENV_ID}" ]]; then
-  log_error "environment-id is required"
-  exit 1
-fi
+require_input "arcane-url" "${ARCANE_URL}"
+require_input "arcane-api-key" "${API_KEY}"
+require_input "environment-id" "${ENV_ID}"
+
 if [[ -z "${COMPOSE_DIR}" && -z "${COMPOSE_FILES_INPUT}" ]]; then
   log_error "At least one of compose-dir or compose-files is required"
   exit 1
 fi
 
-# Mask the API key
-echo "::add-mask::${API_KEY}"
+# [H5] Validate git-token is set when auth-type is http
+if [[ "${AUTH_TYPE}" == "http" && -z "${GIT_TOKEN}" ]]; then
+  log_error "git-token is required when auth-type is http (the default). Set git-token or use auth-type: none."
+  exit 1
+fi
+
+# [H4] Reject unsupported auth-type values
+if [[ "${AUTH_TYPE}" != "none" && "${AUTH_TYPE}" != "http" ]]; then
+  log_error "auth-type '${AUTH_TYPE}' is not supported. Valid values: none, http."
+  exit 1
+fi
+
+# [H3] Validate sync-interval is a positive integer
+if [[ ! "${SYNC_INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
+  log_error "sync-interval must be a positive integer, got '${SYNC_INTERVAL}'"
+  exit 1
+fi
 
 # Export shared env vars
 export_env_vars
