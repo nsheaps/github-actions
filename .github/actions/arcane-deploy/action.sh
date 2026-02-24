@@ -373,9 +373,21 @@ if [[ "${AUTH_TYPE}" != "none" && "${AUTH_TYPE}" != "http" ]]; then
   exit 1
 fi
 
+# Validate auto-sync is a boolean (required for jq --argjson)
+if [[ "${AUTO_SYNC}" != "true" && "${AUTO_SYNC}" != "false" ]]; then
+  log_error "auto-sync must be 'true' or 'false', got '${AUTO_SYNC}'"
+  exit 1
+fi
+
 # [H3] Validate sync-interval is a positive integer
 if [[ ! "${SYNC_INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
   log_error "sync-interval must be a positive integer, got '${SYNC_INTERVAL}'"
+  exit 1
+fi
+
+# Validate arcane-url uses HTTPS
+if [[ "${ARCANE_URL}" != https://* ]]; then
+  log_error "arcane-url must use HTTPS (got '${ARCANE_URL}')"
   exit 1
 fi
 

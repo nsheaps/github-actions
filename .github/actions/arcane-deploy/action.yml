@@ -21,7 +21,7 @@ inputs:
 
   # Compose file discovery
   compose-dir:
-    description: 'Directory to scan for compose files (relative to repo root). Files matching compose.y[a]ml or docker-compose.y[a]ml are auto-discovered.'
+    description: 'Directory to scan for compose files (relative to repo root, up to 2 levels deep). Files matching compose.y[a]ml or docker-compose.y[a]ml are auto-discovered.'
     required: false
     default: ''
 
