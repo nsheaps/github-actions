@@ -1,39 +1,39 @@
-name: "1Password Secret Sync"
-description: "Sync secrets from 1Password to GitHub repository secrets"
+name: '1Password Secret Sync'
+description: 'Sync secrets from 1Password to GitHub repository secrets'
 
 branding:
-  icon: "lock"
-  color: "purple"
+  icon: 'lock'
+  color: 'purple'
 
 inputs:
   config-file:
-    description: "Path to the secret sync config YAML file"
+    description: 'Path to the secret sync config YAML file'
     required: true
 
   op-service-account-token:
-    description: "1Password Service Account token"
+    description: '1Password Service Account token'
     required: true
 
   github-token:
-    description: "GitHub token with repo scope for setting secrets on target repos"
+    description: 'GitHub token with repo scope for setting secrets on target repos'
     required: true
 
   dry-run:
     description: "If true, validate config and read secrets but don't set them"
     required: false
-    default: "false"
+    default: 'false'
 
 outputs:
   synced-count:
-    description: "Number of secrets successfully synced"
+    description: 'Number of secrets successfully synced'
     value: ${{ steps.sync.outputs.synced_count }}
 
   skipped-count:
-    description: "Number of secrets skipped (dry-run or errors)"
+    description: 'Number of secrets skipped (dry-run or errors)'
     value: ${{ steps.sync.outputs.skipped_count }}
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Install 1Password CLI
       uses: 1password/install-cli-action@v2

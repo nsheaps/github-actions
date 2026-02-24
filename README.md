@@ -119,14 +119,13 @@ Sync secrets from 1Password to GitHub repository secrets. Reads a YAML config de
     config-file: .github/secret-sync.yaml
     op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     github-token: ${{ secrets.SECRET_SYNC_PAT }}
-    dry-run: "false"
+    dry-run: 'false'
 ```
 
 **Outputs:**
 
 - `synced-count` - Number of secrets successfully synced
 - `skipped-count` - Number of secrets skipped (dry-run or errors)
-
 
 ### Security Linter Actions
 
