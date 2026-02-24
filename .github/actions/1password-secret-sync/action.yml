@@ -1,0 +1,141 @@
+name: '1Password Secret Sync'
+description: 'Sync secrets from 1Password to GitHub repository secrets'
+
+branding:
+  icon: 'lock'
+  color: 'purple'
+
+inputs:
+  config-file:
+    description: 'Path to the secret sync config YAML file'
+    required: true
+
+  op-service-account-token:
+    description: '1Password Service Account token'
+    required: true
+
+  github-token:
+    description: 'GitHub token with repo scope for setting secrets on target repos'
+    required: true
+
+  dry-run:
+    description: "If true, validate config and read secrets but don't set them"
+    required: false
+    default: 'false'
+
+outputs:
+  synced-count:
+    description: 'Number of secrets successfully synced'
+    value: ${{ steps.sync.outputs.synced_count }}
+
+  skipped-count:
+    description: 'Number of secrets skipped (dry-run or errors)'
+    value: ${{ steps.sync.outputs.skipped_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install 1Password CLI
+      uses: 1password/install-cli-action@v2
+
+    - name: Sync secrets
+      id: sync
+      shell: bash
+      env:
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ inputs.op-service-account-token }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        CONFIG_FILE: ${{ inputs.config-file }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+
+        synced=0
+        skipped=0
+        errors=0
+
+        echo "::group::Reading config from $CONFIG_FILE"
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+          echo "::error::Config file not found: $CONFIG_FILE"
+          exit 1
+        fi
+
+        # Validate we can authenticate with 1Password
+        if ! op account list --format=json > /dev/null 2>&1; then
+          echo "::error::Failed to authenticate with 1Password. Check OP_SERVICE_ACCOUNT_TOKEN."
+          exit 1
+        fi
+        echo "1Password authentication successful"
+        echo "::endgroup::"
+
+        # Parse the config YAML using yq (installed below if missing)
+        if ! command -v yq &> /dev/null; then
+          echo "::group::Installing yq"
+          YQ_VERSION="v4.44.1"
+          YQ_SHA256="6dc2d0cd4e0caca5aeffd0d784a48263591080e4a0895abe69f3a76eb50d1ba3"
+          YQ_INSTALL_DIR="${RUNNER_TEMP:-/tmp}/yq-bin"
+          mkdir -p "$YQ_INSTALL_DIR"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o "$YQ_INSTALL_DIR/yq"
+          echo "$YQ_SHA256  $YQ_INSTALL_DIR/yq" | sha256sum -c
+          chmod +x "$YQ_INSTALL_DIR/yq"
+          export PATH="$YQ_INSTALL_DIR:$PATH"
+          echo "::endgroup::"
+        fi
+
+        # Get total number of secret entries
+        total=$(yq '.secrets | length' "$CONFIG_FILE")
+        echo "Found $total secret definitions"
+
+        for i in $(seq 0 $((total - 1))); do
+          name=$(yq ".secrets[$i].name" "$CONFIG_FILE")
+          source=$(yq ".secrets[$i].source" "$CONFIG_FILE")
+          target_count=$(yq ".secrets[$i].targets | length" "$CONFIG_FILE")
+
+          echo "::group::Secret: $name (source: ${source:0:20}..., $target_count targets)"
+
+          # Read secret from 1Password
+          value=$(op read "$source") || {
+            echo "::error::Failed to read secret '$name' from $source"
+            errors=$((errors + 1))
+            echo "::endgroup::"
+            continue
+          }
+
+          # Mask the value in logs immediately after reading
+          echo "::add-mask::$value"
+          echo "Successfully read secret '$name' from 1Password"
+
+          # Sync to each target
+          for j in $(seq 0 $((target_count - 1))); do
+            target_repo=$(yq ".secrets[$i].targets[$j].repo" "$CONFIG_FILE")
+            target_name=$(yq ".secrets[$i].targets[$j].name // \"$name\"" "$CONFIG_FILE")
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "[DRY RUN] Would set '$target_name' on $target_repo"
+              skipped=$((skipped + 1))
+            else
+              if echo "$value" | gh secret set "$target_name" --repo "$target_repo" --body -; then
+                echo "Set '$target_name' on $target_repo"
+                synced=$((synced + 1))
+              else
+                echo "::warning::Failed to set '$target_name' on $target_repo"
+                errors=$((errors + 1))
+              fi
+            fi
+          done
+
+          echo "::endgroup::"
+        done
+
+        echo ""
+        echo "=== Summary ==="
+        echo "Synced: $synced"
+        echo "Skipped: $skipped"
+        echo "Errors: $errors"
+
+        echo "synced_count=$synced" >> "$GITHUB_OUTPUT"
+        echo "skipped_count=$skipped" >> "$GITHUB_OUTPUT"
+
+        if [[ $errors -gt 0 ]]; then
+          echo "::error::$errors secret(s) failed to sync"
+          exit 1
+        fi

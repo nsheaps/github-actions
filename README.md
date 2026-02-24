@@ -106,6 +106,27 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
     git-token: ${{ secrets.REPO_TOKEN }}
 ```
 
+### Secret Management Actions
+
+#### `1password-secret-sync`
+
+Sync secrets from 1Password to GitHub repository secrets. Reads a YAML config defining source `op://` URIs and target repos. Supports dry-run mode for validation.
+
+```yaml
+- name: Sync 1Password secrets to GitHub
+  uses: nsheaps/github-actions/.github/actions/1password-secret-sync@main
+  with:
+    config-file: .github/secret-sync.yaml
+    op-service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+    github-token: ${{ secrets.SECRET_SYNC_PAT }}
+    dry-run: 'false'
+```
+
+**Outputs:**
+
+- `synced-count` - Number of secrets successfully synced
+- `skipped-count` - Number of secrets skipped (dry-run or errors)
+
 ### Security Linter Actions
 
 All security linters are designed to run in parallel for comprehensive security scanning.
