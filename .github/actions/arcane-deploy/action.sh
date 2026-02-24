@@ -152,7 +152,17 @@ discover_compose_files() {
     return 1
   fi
 
-  printf '%s\n' "${files[@]}"
+  # Deduplicate in case compose-dir scan overlaps with explicit compose-files
+  local seen=()
+  for f in "${files[@]}"; do
+    local dup=false
+    for s in "${seen[@]+"${seen[@]}"}"; do
+      [[ "$s" == "$f" ]] && { dup=true; break; }
+    done
+    $dup || seen+=("$f")
+  done
+
+  printf '%s\n' "${seen[@]}"
 }
 
 # --- Sync Naming ---
@@ -209,12 +219,20 @@ ensure_repository() {
     log_info "Creating new repository: ${REPO_NAME}"
 
     local create_payload
-    create_payload=$(jq -n \
-      --arg name "${REPO_NAME}" \
-      --arg url "${REPO_URL}" \
-      --arg authType "${AUTH_TYPE}" \
-      --arg token "${GIT_TOKEN}" \
-      '{name: $name, url: $url, authType: $authType, token: $token}')
+    if [[ "${AUTH_TYPE}" == "http" ]]; then
+      create_payload=$(jq -n \
+        --arg name "${REPO_NAME}" \
+        --arg url "${REPO_URL}" \
+        --arg authType "${AUTH_TYPE}" \
+        --arg token "${GIT_TOKEN}" \
+        '{name: $name, url: $url, authType: $authType, token: $token}')
+    else
+      create_payload=$(jq -n \
+        --arg name "${REPO_NAME}" \
+        --arg url "${REPO_URL}" \
+        --arg authType "${AUTH_TYPE}" \
+        '{name: $name, url: $url, authType: $authType}')
+    fi
 
     local result
     result=$(arcane_api POST "/customize/git-repositories" -d "${create_payload}")
@@ -300,7 +318,9 @@ upsert_sync() {
   # Deduplicated trigger-sync (was duplicated in both branches)
   if [[ "${TRIGGER_SYNC}" == "true" ]]; then
     log_info "  Triggering sync..."
-    arcane_api POST "/environments/${ENV_ID}/gitops-syncs/${sync_id}/sync" > /dev/null || true
+    if ! arcane_api POST "/environments/${ENV_ID}/gitops-syncs/${sync_id}/sync" > /dev/null; then
+      log_info "  Warning: trigger-sync failed for ${sync_name} (sync was still created/updated)"
+    fi
   fi
 }
 
