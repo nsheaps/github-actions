@@ -77,7 +77,7 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
 | `sync-interval`    | No       | `5`                   | Minutes between auto-sync polls                                                 |
 | `trigger-sync`     | No       | `true`                | Trigger immediate sync after create/update                                      |
 | `sync-name-prefix` | No       | GitHub repo name      | Prefix for sync names in Arcane                                                 |
-| `env-vars`         | No       |                       | Runner env vars (`KEY=VALUE` per line) for subsequent steps. Values are masked.  |
+| `env-vars`         | No       |                       | Runner env vars (`KEY=VALUE` per line) for subsequent steps. Values are masked. |
 
 ## Outputs
 
