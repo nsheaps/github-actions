@@ -89,6 +89,23 @@ Read a prompt template file and interpolate environment variables using envsubst
   run: echo "${{ steps.prompt.outputs.prompt }}"
 ```
 
+### Deployment Actions
+
+#### `arcane-deploy`
+
+Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane) via GitOps sync. Auto-discovers compose files and creates/updates syncs. See [action README](.github/actions/arcane-deploy/README.md) for full docs.
+
+```yaml
+- name: Deploy stacks to Arcane
+  uses: nsheaps/github-actions/.github/actions/arcane-deploy@main
+  with:
+    arcane-url: ${{ secrets.ARCANE_URL }}
+    arcane-api-key: ${{ secrets.ARCANE_API_KEY }}
+    environment-id: '1'
+    compose-dir: stacks
+    git-token: ${{ secrets.REPO_TOKEN }}
+```
+
 ### Security Linter Actions
 
 All security linters are designed to run in parallel for comprehensive security scanning.
