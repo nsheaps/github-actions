@@ -81,10 +81,6 @@ runs:
         echo "Wrote GITHUB_TOKEN to GITHUB_ENV"
         git config --global user.name '${{ steps.get-user-id.outputs.user-name }}'
         git config --global user.email '${{ steps.get-user-id.outputs.user-email }}'
-        if [ "${{ inputs.skip-checkout }}" != "true" ]; then
-          git config user.name '${{ steps.get-user-id.outputs.user-name }}'
-          git config user.email '${{ steps.get-user-id.outputs.user-email }}'
-        fi
 
     - name: Output GitHub App authentication info
       shell: bash
@@ -103,3 +99,10 @@ runs:
         token: ${{ steps.app-token.outputs.token }}
         clean: false
         persist-credentials: true
+
+    - name: Configure local git user
+      if: inputs.skip-checkout != 'true'
+      shell: bash
+      run: |
+        git config user.name '${{ steps.get-user-id.outputs.user-name }}'
+        git config user.email '${{ steps.get-user-id.outputs.user-email }}'
