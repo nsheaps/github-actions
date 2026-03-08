@@ -36,7 +36,8 @@ runs:
   using: 'composite'
   steps:
     - name: Install 1Password CLI
-      uses: 1password/install-cli-action@v2
+      # Pin to commit SHA for supply chain security — update when action changes
+      uses: 1password/install-cli-action@9a0c9dd934086b7ab1d90115d455bda1c53c2bdb # v2.0.2
 
     - name: Sync secrets
       id: sync
@@ -113,7 +114,7 @@ runs:
               echo "[DRY RUN] Would set '$target_name' on $target_repo"
               skipped=$((skipped + 1))
             else
-              if echo "$value" | gh secret set "$target_name" --repo "$target_repo" --body -; then
+              if echo "$value" | gh secret set "$target_name" --repo "$target_repo"; then
                 echo "Set '$target_name' on $target_repo"
                 synced=$((synced + 1))
               else
