@@ -19,6 +19,11 @@ inputs:
     required: false
     default: ${{ github.repository_owner }}
 
+  skip-checkout:
+    description: 'Skip the checkout step (useful when called from checkout-as-app)'
+    required: false
+    default: 'false'
+
 outputs:
   token:
     description: 'GitHub App token'
@@ -36,6 +41,10 @@ outputs:
     description: 'GitHub App bot user name (app slug with [bot] suffix)'
     value: ${{ steps.get-user-id.outputs.user-name }}
 
+  user-email:
+    description: 'GitHub App bot email address'
+    value: ${{ steps.get-user-id.outputs.user-email }}
+
 runs:
   using: 'composite'
   steps:
@@ -51,8 +60,12 @@ runs:
       id: get-user-id
       shell: bash
       run: |
-        echo "user-id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
-        echo "user-name=${{ steps.app-token.outputs.app-slug }}[bot]" >> "$GITHUB_OUTPUT"
+        USER_ID=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)
+        USER_NAME="${{ steps.app-token.outputs.app-slug }}[bot]"
+        USER_EMAIL="${USER_ID}+${USER_NAME}@users.noreply.github.com"
+        echo "user-id=${USER_ID}" >> "$GITHUB_OUTPUT"
+        echo "user-name=${USER_NAME}" >> "$GITHUB_OUTPUT"
+        echo "user-email=${USER_EMAIL}" >> "$GITHUB_OUTPUT"
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
@@ -63,13 +76,26 @@ runs:
       run: |
         gh auth setup-git
         echo "GH_TOKEN=${GH_TOKEN}" >> $GITHUB_ENV
+        echo "Wrote GH_TOKEN to GITHUB_ENV"
         echo "GITHUB_TOKEN=${GH_TOKEN}" >> $GITHUB_ENV
+        echo "Wrote GITHUB_TOKEN to GITHUB_ENV"
         git config --global user.name '${{ steps.get-user-id.outputs.user-name }}'
         git config user.name '${{ steps.get-user-id.outputs.user-name }}'
-        git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.get-user-id.outputs.user-name }}@users.noreply.github.com'
-        git config user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.get-user-id.outputs.user-name }}@users.noreply.github.com'
+        git config --global user.email '${{ steps.get-user-id.outputs.user-email }}'
+        git config user.email '${{ steps.get-user-id.outputs.user-email }}'
+
+    - name: Output GitHub App authentication info
+      shell: bash
+      run: |
+        echo "GitHub App Authentication Info:"
+        echo "-------------------------------"
+        echo "- User Name: ${{ steps.get-user-id.outputs.user-name }}"
+        echo "- User ID: ${{ steps.get-user-id.outputs.user-id }}"
+        echo "- User Email: ${{ steps.get-user-id.outputs.user-email }}"
+        echo "- App Slug: ${{ steps.app-token.outputs.app-slug }}"
 
     - name: Configure repo checkout token
+      if: inputs.skip-checkout != 'true'
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       with:
         token: ${{ steps.app-token.outputs.token }}
