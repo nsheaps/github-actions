@@ -133,7 +133,7 @@ runs:
     # ── Step 1: Authenticate as GitHub App (skip its built-in checkout) ──
     - name: Authenticate as GitHub App
       id: auth
-      uses: ./.github/actions/github-app-auth
+      uses: nsheaps/github-actions/.github/actions/github-app-auth@main
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
