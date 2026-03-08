@@ -161,3 +161,9 @@ runs:
         set-safe-directory: ${{ inputs.set-safe-directory }}
         github-server-url: ${{ inputs.github-server-url }}
         persist-credentials: ${{ inputs.persist-credentials }}
+
+    - name: Configure local git user
+      shell: bash
+      run: |
+        git config user.name '${{ steps.auth.outputs.user-name }}'
+        git config user.email '${{ steps.auth.outputs.user-email }}'
