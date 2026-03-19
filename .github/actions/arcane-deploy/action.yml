@@ -72,11 +72,6 @@ inputs:
     required: false
     default: 'true'
 
-  sync-name-prefix:
-    description: 'Prefix for sync names in Arcane. Defaults to the GitHub repository name.'
-    required: false
-    default: ''
-
   # Workflow environment variables
   env-vars:
     description: 'Environment variables (KEY=VALUE per line) to export to the GitHub Actions runner via $GITHUB_ENV. These are available to subsequent workflow steps, NOT inside deployed containers. Values are automatically masked in logs.'
@@ -117,5 +112,4 @@ runs:
         INPUT_AUTO_SYNC: ${{ inputs.auto-sync }}
         INPUT_SYNC_INTERVAL: ${{ inputs.sync-interval }}
         INPUT_TRIGGER_SYNC: ${{ inputs.trigger-sync }}
-        INPUT_SYNC_NAME_PREFIX: ${{ inputs.sync-name-prefix }}
         INPUT_ENV_VARS: ${{ inputs.env-vars }}

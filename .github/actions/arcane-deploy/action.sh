@@ -16,7 +16,6 @@ AUTO_SYNC="${INPUT_AUTO_SYNC:-true}"
 SYNC_INTERVAL="${INPUT_SYNC_INTERVAL:-5}"
 TRIGGER_SYNC="${INPUT_TRIGGER_SYNC:-true}"
 ENV_VARS="${INPUT_ENV_VARS:-}"
-SYNC_NAME_PREFIX="${INPUT_SYNC_NAME_PREFIX:-${GITHUB_REPOSITORY##*/}}"
 
 # [C1/C2] Mask secrets immediately, before any logging or API calls
 [[ -n "${API_KEY}" ]] && echo "::add-mask::${API_KEY}"
@@ -167,25 +166,18 @@ discover_compose_files() {
 
 # --- Sync Naming ---
 # Derive a sync name from a compose file path.
-# "stacks/myapp/compose.yml" -> "${prefix}-myapp"
-# "compose.yml" (root) -> "${prefix}"
+# "stacks/myapp/compose.yml" -> "myapp"
+# "compose.yml" (root) -> "root"
 sync_name_from_path() {
   local path="$1"
   local dir
   dir=$(dirname "${path}")
 
-  local name
   if [[ "${dir}" == "." ]]; then
-    name="${SYNC_NAME_PREFIX}"
+    echo "root"
   else
-    name=$(basename "${dir}")
-    # Avoid "prefix-prefix" when the directory name matches the prefix
-    if [[ "${name}" != "${SYNC_NAME_PREFIX}" ]]; then
-      name="${SYNC_NAME_PREFIX}-${name}"
-    fi
+    basename "${dir}"
   fi
-
-  echo "${name}"
 }
 
 # --- Repository Management ---
