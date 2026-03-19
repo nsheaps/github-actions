@@ -167,17 +167,8 @@ discover_compose_files() {
 # --- Sync Naming ---
 # Derive a sync name from a compose file path.
 # "stacks/myapp/compose.yml" -> "myapp"
-# "compose.yml" (root) -> "root"
 sync_name_from_path() {
-  local path="$1"
-  local dir
-  dir=$(dirname "${path}")
-
-  if [[ "${dir}" == "." ]]; then
-    echo "root"
-  else
-    basename "${dir}"
-  fi
+  basename "$(dirname "$1")"
 }
 
 # --- Repository Management ---
