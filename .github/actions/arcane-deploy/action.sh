@@ -216,7 +216,7 @@ ensure_repository() {
       local update_payload
       update_payload=$(jq -n \
         --arg token "${GIT_TOKEN}" \
-        '{token: $token}')
+        '{token: $token, enabled: true}')
 
       arcane_api PUT "/customize/git-repositories/${REPOSITORY_ID}" \
         -d "${update_payload}" > /dev/null
@@ -229,7 +229,7 @@ ensure_repository() {
         --arg sshKey "${SSH_PRIVATE_KEY}" \
         --arg username "git" \
         --arg sshHostKeyVerification "${SSH_HOST_KEY_VERIFICATION}" \
-        '{sshKey: $sshKey, username: $username, sshHostKeyVerification: $sshHostKeyVerification}')
+        '{sshKey: $sshKey, username: $username, sshHostKeyVerification: $sshHostKeyVerification, enabled: true}')
 
       arcane_api PUT "/customize/git-repositories/${REPOSITORY_ID}" \
         -d "${update_payload}" > /dev/null
