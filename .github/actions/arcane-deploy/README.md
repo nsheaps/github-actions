@@ -76,25 +76,25 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
 
 ## Inputs
 
-| Input              | Required | Default               | Description                                                                     |
-| ------------------ | -------- | --------------------- | ------------------------------------------------------------------------------- |
-| `arcane-url`       | Yes      |                       | Base URL of the Arcane instance (must use HTTPS)                                |
-| `arcane-api-key`   | Yes      |                       | API key (from Arcane Settings > API Keys)                                       |
-| `environment-id`   | Yes      |                       | Arcane environment ID                                                           |
-| `compose-dir`      | No       |                       | Directory to scan for compose files (up to 2 levels deep)                       |
-| `compose-files`    | No       |                       | Newline-separated list of compose file paths                                    |
-| `repository-url`   | No       | GitHub repo HTTPS URL | Git URL for Arcane to clone                                                     |
-| `repository-name`  | No       | GitHub repo name      | Display name in Arcane                                                          |
-| `branch`           | No       | Triggering branch     | Branch to sync from                                                             |
-| `auth-type`        | No       | `http`                | Git auth type: `none`, `http`, or `ssh`                                         |
-| `git-token`        | No       |                       | Token for HTTP git auth. Required when auth-type=http.                          |
-| `ssh-private-key`  | No       |                       | SSH private key for git auth (e.g. deploy key). Required when auth-type=ssh.    |
-| `ssh-host-key-verification` | No | `accept_new`     | SSH host key verification mode: `accept_new`, `accept_all`, or `reject`.        |
-| `auto-sync`        | No       | `true`                | Enable Arcane auto-sync polling                                                 |
-| `sync-interval`    | No       | `5`                   | Minutes between auto-sync polls                                                 |
-| `trigger-sync`     | No       | `true`                | Trigger immediate sync after create/update                                      |
-| `sync-name-prefix` | No       | GitHub repo name      | Prefix for sync names in Arcane                                                 |
-| `env-vars`         | No       |                       | Runner env vars (`KEY=VALUE` per line) for subsequent steps. Values are masked. |
+| Input                       | Required | Default               | Description                                                                     |
+| --------------------------- | -------- | --------------------- | ------------------------------------------------------------------------------- |
+| `arcane-url`                | Yes      |                       | Base URL of the Arcane instance (must use HTTPS)                                |
+| `arcane-api-key`            | Yes      |                       | API key (from Arcane Settings > API Keys)                                       |
+| `environment-id`            | Yes      |                       | Arcane environment ID                                                           |
+| `compose-dir`               | No       |                       | Directory to scan for compose files (up to 2 levels deep)                       |
+| `compose-files`             | No       |                       | Newline-separated list of compose file paths                                    |
+| `repository-url`            | No       | GitHub repo HTTPS URL | Git URL for Arcane to clone                                                     |
+| `repository-name`           | No       | GitHub repo name      | Display name in Arcane                                                          |
+| `branch`                    | No       | Triggering branch     | Branch to sync from                                                             |
+| `auth-type`                 | No       | `http`                | Git auth type: `none`, `http`, or `ssh`                                         |
+| `git-token`                 | No       |                       | Token for HTTP git auth. Required when auth-type=http.                          |
+| `ssh-private-key`           | No       |                       | SSH private key for git auth (e.g. deploy key). Required when auth-type=ssh.    |
+| `ssh-host-key-verification` | No       | `accept_new`          | SSH host key verification mode: `accept_new`, `accept_all`, or `reject`.        |
+| `auto-sync`                 | No       | `true`                | Enable Arcane auto-sync polling                                                 |
+| `sync-interval`             | No       | `5`                   | Minutes between auto-sync polls                                                 |
+| `trigger-sync`              | No       | `true`                | Trigger immediate sync after create/update                                      |
+| `sync-name-prefix`          | No       | GitHub repo name      | Prefix for sync names in Arcane                                                 |
+| `env-vars`                  | No       |                       | Runner env vars (`KEY=VALUE` per line) for subsequent steps. Values are masked. |
 
 ## Outputs
 
