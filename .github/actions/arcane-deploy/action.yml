@@ -47,7 +47,7 @@ inputs:
     default: ''
 
   auth-type:
-    description: 'Git authentication type: none or http'
+    description: 'Git authentication type: none, http, or ssh'
     required: false
     default: 'http'
 
@@ -55,6 +55,16 @@ inputs:
     description: 'Token for HTTP git authentication. Required when auth-type is http (the default).'
     required: false
     default: ''
+
+  ssh-private-key:
+    description: 'SSH private key for git authentication (e.g. a GitHub deploy key). Required when auth-type is ssh.'
+    required: false
+    default: ''
+
+  ssh-host-key-verification:
+    description: 'SSH host key verification mode for Arcane. Valid values: accept_new, accept_all, reject.'
+    required: false
+    default: 'accept_new'
 
   # Sync behavior
   auto-sync:
@@ -109,6 +119,8 @@ runs:
         INPUT_BRANCH: ${{ inputs.branch }}
         INPUT_AUTH_TYPE: ${{ inputs.auth-type }}
         INPUT_GIT_TOKEN: ${{ inputs.git-token }}
+        INPUT_SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        INPUT_SSH_HOST_KEY_VERIFICATION: ${{ inputs.ssh-host-key-verification }}
         INPUT_AUTO_SYNC: ${{ inputs.auto-sync }}
         INPUT_SYNC_INTERVAL: ${{ inputs.sync-interval }}
         INPUT_TRIGGER_SYNC: ${{ inputs.trigger-sync }}

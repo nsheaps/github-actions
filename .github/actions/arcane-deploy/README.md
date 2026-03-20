@@ -42,6 +42,21 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
     git-token: ${{ secrets.REPO_TOKEN }}
 ```
 
+**SSH deploy key** — use a GitHub deploy key instead of a PAT:
+
+```yaml
+- name: Deploy stacks to Arcane
+  uses: nsheaps/github-actions/.github/actions/arcane-deploy@main
+  with:
+    arcane-url: ${{ secrets.ARCANE_URL }}
+    arcane-api-key: ${{ secrets.ARCANE_API_KEY }}
+    environment-id: '1'
+    compose-dir: stacks
+    auth-type: ssh
+    ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+    repository-url: git@github.com:myorg/myrepo.git
+```
+
 **With workflow environment variables** (available to subsequent steps, not inside containers):
 
 ```yaml
@@ -71,8 +86,10 @@ Deploy Docker Compose stacks to [Arcane](https://github.com/getarcaneapp/arcane)
 | `repository-url`   | No       | GitHub repo HTTPS URL | Git URL for Arcane to clone                                                     |
 | `repository-name`  | No       | GitHub repo name      | Display name in Arcane                                                          |
 | `branch`           | No       | Triggering branch     | Branch to sync from                                                             |
-| `auth-type`        | No       | `http`                | Git auth type: `none` or `http`                                                 |
+| `auth-type`        | No       | `http`                | Git auth type: `none`, `http`, or `ssh`                                         |
 | `git-token`        | No       |                       | Token for HTTP git auth. Required when auth-type=http.                          |
+| `ssh-private-key`  | No       |                       | SSH private key for git auth (e.g. deploy key). Required when auth-type=ssh.    |
+| `ssh-host-key-verification` | No | `accept_new`     | SSH host key verification mode: `accept_new`, `accept_all`, or `reject`.        |
 | `auto-sync`        | No       | `true`                | Enable Arcane auto-sync polling                                                 |
 | `sync-interval`    | No       | `5`                   | Minutes between auto-sync polls                                                 |
 | `trigger-sync`     | No       | `true`                | Trigger immediate sync after create/update                                      |
