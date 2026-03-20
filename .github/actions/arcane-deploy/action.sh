@@ -206,7 +206,7 @@ ensure_repository() {
 
   REPOSITORY_ID=$(echo "${repos}" | jq -r \
     --arg url "${REPO_URL}" \
-    '[.[] | select(.url == $url)] | first // empty | .id')
+    '[.data[] | select(.url == $url)] | first // empty | .id')
 
   if [[ -n "${REPOSITORY_ID}" && "${REPOSITORY_ID}" != "null" ]]; then
     log_info "Found existing repository: ${REPOSITORY_ID}"
@@ -267,7 +267,7 @@ ensure_repository() {
     result=$(arcane_api POST "/customize/git-repositories" -d "${create_payload}")
 
     # [H7] Validate the response contains a real ID
-    REPOSITORY_ID=$(jq_extract_id "${result}" '.id' "create repository")
+    REPOSITORY_ID=$(jq_extract_id "${result}" '.data.id' "create repository")
     log_info "Created repository: ${REPOSITORY_ID}"
   fi
 
@@ -286,7 +286,7 @@ upsert_sync() {
   existing_id=$(echo "${existing_syncs}" | jq -r \
     --arg composePath "${compose_path}" \
     --arg repoId "${REPOSITORY_ID}" \
-    '[.[] | select(.composePath == $composePath and .repositoryId == $repoId)] | first // empty | .id')
+    '[.data[] | select(.composePath == $composePath and .repositoryId == $repoId)] | first // empty | .id')
 
   local sync_id
   if [[ -n "${existing_id}" && "${existing_id}" != "null" ]]; then
@@ -338,7 +338,7 @@ upsert_sync() {
     result=$(arcane_api POST "/environments/${ENV_ID}/gitops-syncs" -d "${create_payload}")
 
     # [H7] Validate the response contains a real ID
-    sync_id=$(jq_extract_id "${result}" '.id' "create sync '${sync_name}'")
+    sync_id=$(jq_extract_id "${result}" '.data.id' "create sync '${sync_name}'")
     log_info "  Created sync: ${sync_id}"
 
     SYNCS_CREATED=$((SYNCS_CREATED + 1))
