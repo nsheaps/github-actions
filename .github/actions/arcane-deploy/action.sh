@@ -82,7 +82,7 @@ arcane_api() {
   local http_code
   # [H2] Capture curl exit code separately to detect transport failures
   http_code=$(curl -s -w "%{http_code}" \
-    --max-time 30 --connect-timeout 10 \
+    --max-time 360 --connect-timeout 10 \
     -X "${method}" \
     -H "X-Api-Key: ${API_KEY}" \
     -H "Content-Type: application/json" \
@@ -216,7 +216,7 @@ ensure_repository() {
       local update_payload
       update_payload=$(jq -n \
         --arg token "${GIT_TOKEN}" \
-        '{token: $token}')
+        '{token: $token, enabled: true}')
 
       arcane_api PUT "/customize/git-repositories/${REPOSITORY_ID}" \
         -d "${update_payload}" > /dev/null
@@ -229,7 +229,7 @@ ensure_repository() {
         --arg sshKey "${SSH_PRIVATE_KEY}" \
         --arg username "git" \
         --arg sshHostKeyVerification "${SSH_HOST_KEY_VERIFICATION}" \
-        '{sshKey: $sshKey, username: $username, sshHostKeyVerification: $sshHostKeyVerification}')
+        '{sshKey: $sshKey, username: $username, sshHostKeyVerification: $sshHostKeyVerification, enabled: true}')
 
       arcane_api PUT "/customize/git-repositories/${REPOSITORY_ID}" \
         -d "${update_payload}" > /dev/null
