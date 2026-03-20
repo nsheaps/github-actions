@@ -7,7 +7,12 @@ API_KEY="${INPUT_ARCANE_API_KEY}"
 ENV_ID="${INPUT_ENVIRONMENT_ID}"
 COMPOSE_DIR="${INPUT_COMPOSE_DIR:-}"
 COMPOSE_FILES_INPUT="${INPUT_COMPOSE_FILES:-}"
-REPO_URL="${INPUT_REPOSITORY_URL:-https://github.com/${GITHUB_REPOSITORY}.git}"
+# Default to SSH URL format when auth-type is ssh, HTTPS otherwise
+if [[ -z "${INPUT_REPOSITORY_URL:-}" && "${INPUT_AUTH_TYPE:-http}" == "ssh" ]]; then
+  REPO_URL="git@github.com:${GITHUB_REPOSITORY}.git"
+else
+  REPO_URL="${INPUT_REPOSITORY_URL:-https://github.com/${GITHUB_REPOSITORY}.git}"
+fi
 REPO_NAME="${INPUT_REPOSITORY_NAME:-${GITHUB_REPOSITORY##*/}}"
 BRANCH="${INPUT_BRANCH:-${GITHUB_REF_NAME:-main}}"
 AUTH_TYPE="${INPUT_AUTH_TYPE:-http}"
@@ -22,7 +27,14 @@ ENV_VARS="${INPUT_ENV_VARS:-}"
 # [C1/C2] Mask secrets immediately, before any logging or API calls
 [[ -n "${API_KEY}" ]] && echo "::add-mask::${API_KEY}"
 [[ -n "${GIT_TOKEN}" ]] && echo "::add-mask::${GIT_TOKEN}"
-[[ -n "${SSH_PRIVATE_KEY}" ]] && echo "::add-mask::${SSH_PRIVATE_KEY}"
+# SSH private keys are multiline; ::add-mask:: works per-line, so mask each line
+# to prevent any part of the key from appearing in logs.
+if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+  echo "::add-mask::${SSH_PRIVATE_KEY}"
+  while IFS= read -r _line; do
+    [[ -n "${_line}" ]] && echo "::add-mask::${_line}"
+  done <<< "${SSH_PRIVATE_KEY}"
+fi
 
 SYNCS_CREATED=0
 SYNCS_UPDATED=0
@@ -210,6 +222,8 @@ ensure_repository() {
         -d "${update_payload}" > /dev/null
       log_info "Updated repository credentials"
     elif [[ "${AUTH_TYPE}" == "ssh" && -n "${SSH_PRIVATE_KEY}" ]]; then
+      # Arcane API field names use camelCase (matching existing authType/token convention).
+      # Backend model: ssh_key -> sshKey, ssh_host_key_verification -> sshHostKeyVerification
       local update_payload
       update_payload=$(jq -n \
         --arg sshKey "${SSH_PRIVATE_KEY}" \
