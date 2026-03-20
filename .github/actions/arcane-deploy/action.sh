@@ -82,7 +82,7 @@ arcane_api() {
   local http_code
   # [H2] Capture curl exit code separately to detect transport failures
   http_code=$(curl -s -w "%{http_code}" \
-    --max-time 30 --connect-timeout 10 \
+    --max-time 360 --connect-timeout 10 \
     -X "${method}" \
     -H "X-Api-Key: ${API_KEY}" \
     -H "Content-Type: application/json" \
