@@ -7,11 +7,18 @@ API_KEY="${INPUT_ARCANE_API_KEY}"
 ENV_ID="${INPUT_ENVIRONMENT_ID}"
 COMPOSE_DIR="${INPUT_COMPOSE_DIR:-}"
 COMPOSE_FILES_INPUT="${INPUT_COMPOSE_FILES:-}"
-REPO_URL="${INPUT_REPOSITORY_URL:-https://github.com/${GITHUB_REPOSITORY}.git}"
+# Default to SSH URL format when auth-type is ssh, HTTPS otherwise
+if [[ -z "${INPUT_REPOSITORY_URL:-}" && "${INPUT_AUTH_TYPE:-http}" == "ssh" ]]; then
+  REPO_URL="git@github.com:${GITHUB_REPOSITORY}.git"
+else
+  REPO_URL="${INPUT_REPOSITORY_URL:-https://github.com/${GITHUB_REPOSITORY}.git}"
+fi
 REPO_NAME="${INPUT_REPOSITORY_NAME:-${GITHUB_REPOSITORY##*/}}"
 BRANCH="${INPUT_BRANCH:-${GITHUB_REF_NAME:-main}}"
 AUTH_TYPE="${INPUT_AUTH_TYPE:-http}"
 GIT_TOKEN="${INPUT_GIT_TOKEN:-}"
+SSH_PRIVATE_KEY="${INPUT_SSH_PRIVATE_KEY:-}"
+SSH_HOST_KEY_VERIFICATION="${INPUT_SSH_HOST_KEY_VERIFICATION:-accept_new}"
 AUTO_SYNC="${INPUT_AUTO_SYNC:-true}"
 SYNC_INTERVAL="${INPUT_SYNC_INTERVAL:-5}"
 TRIGGER_SYNC="${INPUT_TRIGGER_SYNC:-true}"
@@ -20,6 +27,14 @@ ENV_VARS="${INPUT_ENV_VARS:-}"
 # [C1/C2] Mask secrets immediately, before any logging or API calls
 [[ -n "${API_KEY}" ]] && echo "::add-mask::${API_KEY}"
 [[ -n "${GIT_TOKEN}" ]] && echo "::add-mask::${GIT_TOKEN}"
+# SSH private keys are multiline; ::add-mask:: works per-line, so mask each line
+# to prevent any part of the key from appearing in logs.
+if [[ -n "${SSH_PRIVATE_KEY}" ]]; then
+  echo "::add-mask::${SSH_PRIVATE_KEY}"
+  while IFS= read -r _line; do
+    [[ -n "${_line}" ]] && echo "::add-mask::${_line}"
+  done <<< "${SSH_PRIVATE_KEY}"
+fi
 
 SYNCS_CREATED=0
 SYNCS_UPDATED=0
@@ -196,7 +211,7 @@ ensure_repository() {
   if [[ -n "${REPOSITORY_ID}" && "${REPOSITORY_ID}" != "null" ]]; then
     log_info "Found existing repository: ${REPOSITORY_ID}"
 
-    # Update credentials so the token stays current
+    # Update credentials so they stay current
     if [[ "${AUTH_TYPE}" == "http" && -n "${GIT_TOKEN}" ]]; then
       local update_payload
       update_payload=$(jq -n \
@@ -206,6 +221,19 @@ ensure_repository() {
       arcane_api PUT "/customize/git-repositories/${REPOSITORY_ID}" \
         -d "${update_payload}" > /dev/null
       log_info "Updated repository credentials"
+    elif [[ "${AUTH_TYPE}" == "ssh" && -n "${SSH_PRIVATE_KEY}" ]]; then
+      # Arcane API field names use camelCase (matching existing authType/token convention).
+      # Backend model: ssh_key -> sshKey, ssh_host_key_verification -> sshHostKeyVerification
+      local update_payload
+      update_payload=$(jq -n \
+        --arg sshKey "${SSH_PRIVATE_KEY}" \
+        --arg username "git" \
+        --arg sshHostKeyVerification "${SSH_HOST_KEY_VERIFICATION}" \
+        '{sshKey: $sshKey, username: $username, sshHostKeyVerification: $sshHostKeyVerification}')
+
+      arcane_api PUT "/customize/git-repositories/${REPOSITORY_ID}" \
+        -d "${update_payload}" > /dev/null
+      log_info "Updated repository SSH credentials"
     fi
   else
     log_info "Creating new repository: ${REPO_NAME}"
@@ -218,6 +246,15 @@ ensure_repository() {
         --arg authType "${AUTH_TYPE}" \
         --arg token "${GIT_TOKEN}" \
         '{name: $name, url: $url, authType: $authType, token: $token}')
+    elif [[ "${AUTH_TYPE}" == "ssh" ]]; then
+      create_payload=$(jq -n \
+        --arg name "${REPO_NAME}" \
+        --arg url "${REPO_URL}" \
+        --arg authType "${AUTH_TYPE}" \
+        --arg sshKey "${SSH_PRIVATE_KEY}" \
+        --arg username "git" \
+        --arg sshHostKeyVerification "${SSH_HOST_KEY_VERIFICATION}" \
+        '{name: $name, url: $url, authType: $authType, sshKey: $sshKey, username: $username, sshHostKeyVerification: $sshHostKeyVerification}')
     else
       create_payload=$(jq -n \
         --arg name "${REPO_NAME}" \
@@ -379,9 +416,15 @@ if [[ "${AUTH_TYPE}" == "http" && -z "${GIT_TOKEN}" ]]; then
   exit 1
 fi
 
+# Validate ssh-private-key is set when auth-type is ssh
+if [[ "${AUTH_TYPE}" == "ssh" && -z "${SSH_PRIVATE_KEY}" ]]; then
+  log_error "ssh-private-key is required when auth-type is ssh."
+  exit 1
+fi
+
 # [H4] Reject unsupported auth-type values
-if [[ "${AUTH_TYPE}" != "none" && "${AUTH_TYPE}" != "http" ]]; then
-  log_error "auth-type '${AUTH_TYPE}' is not supported. Valid values: none, http."
+if [[ "${AUTH_TYPE}" != "none" && "${AUTH_TYPE}" != "http" && "${AUTH_TYPE}" != "ssh" ]]; then
+  log_error "auth-type '${AUTH_TYPE}' is not supported. Valid values: none, http, ssh."
   exit 1
 fi
 
