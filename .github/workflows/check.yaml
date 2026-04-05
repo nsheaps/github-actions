@@ -46,7 +46,7 @@ jobs:
           echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
 
       - name: Install mise
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v3
 
       - name: Run format
         id: format
@@ -93,7 +93,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install mise and tools
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v3
         with:
           install_args: 'grype trivy syft gitleaks trufflehog checkov aqua:secretlint/secretlint'
 
