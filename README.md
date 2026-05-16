@@ -74,6 +74,34 @@ Extract debugging information from Claude Code CLI sessions.
   run: echo "Session ID: ${{ steps.debug.outputs.session-id }}"
 ```
 
+#### `claude-stream-shim`
+
+Beautify `anthropics/claude-code-action` output by streaming Claude's
+`stream-json` through `claude-stream` (from `nsheaps/claude-utils`) so the
+workflow log shows a live chatroom view as Claude works. Installs the
+`claude` CLI and `claude-stream`, then writes a shim binary that tees
+Claude's stdout through `claude-stream` to stderr. Set
+`show_full_output: false` on the underlying action so the raw JSON dump
+is suppressed and only the chatroom view appears.
+
+```yaml
+- name: Setup Claude stream shim
+  uses: nsheaps/github-actions/.github/actions/claude-stream-shim@main
+  id: shim
+
+- name: Run Claude Code
+  uses: anthropics/claude-code-action@v1
+  with:
+    path_to_claude_code_executable: ${{ steps.shim.outputs.shim-path }}
+    show_full_output: false
+    # ... rest of inputs unchanged
+```
+
+**Outputs:**
+
+- `shim-path` - Absolute path to the shim binary
+- `real-claude-path` - Absolute path to the underlying `claude` binary
+
 #### `interpolate-prompt`
 
 Read a prompt template file and interpolate environment variables using envsubst.
