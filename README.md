@@ -84,6 +84,12 @@ Claude's stdout through `claude-stream` to stderr. Set
 `show_full_output: false` on the underlying action so the raw JSON dump
 is suppressed and only the chatroom view appears.
 
+> [!NOTE]
+> `claude-code-action@v1` calls the Claude Agent SDK in-process and does not
+> exercise `path_to_claude_code_executable`, so this shim is presently a
+> no-op against v1. Use `claude-stream-tail` (below) with
+> `qoomon/actions--parallel-steps@v1` to get a live chatroom view against v1.
+
 ```yaml
 - name: Setup Claude stream shim
   uses: nsheaps/github-actions/.github/actions/claude-stream-shim@main
@@ -101,6 +107,39 @@ is suppressed and only the chatroom view appears.
 
 - `shim-path` - Absolute path to the shim binary
 - `real-claude-path` - Absolute path to the underlying `claude` binary
+
+#### `claude-stream-tail`
+
+Sidecar action that pretty-prints a live Claude Code session as a chatroom
+view in the workflow log. Waits for a fresh session JSONL to appear under
+`~/.claude/projects/`, tails it through `claude-stream`, and exits when
+the SDK writes its terminal `result` message (or on timeout).
+
+Designed to run in parallel with `anthropics/claude-code-action@v1` via
+`qoomon/actions--parallel-steps@v1`, since v1 uses the Claude Agent SDK
+in-process and no longer spawns the `claude` CLI (making CLI-wrapper
+approaches impossible).
+
+```yaml
+- name: Run review + live chatroom in parallel
+  uses: qoomon/actions--parallel-steps@v1
+  with:
+    steps: |
+      - uses: anthropics/claude-code-action@v1
+        id: review
+        with:
+          show_full_output: false
+          # ... rest of claude-code-action inputs
+      - uses: nsheaps/github-actions/.github/actions/claude-stream-tail@main
+        id: chatroom
+```
+
+**Inputs:**
+
+- `claude-utils-version` - Tag of `nsheaps/claude-utils` to install (default `0.12.13`)
+- `timeout-seconds` - Max seconds to wait for / follow the session (default `1800`)
+- `poll-interval-seconds` - Polling cadence while waiting for session file (default `1`)
+- `projects-dir` - Override for the SDK projects directory (default `$HOME/.claude/projects`)
 
 #### `interpolate-prompt`
 
