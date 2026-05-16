@@ -1,0 +1,119 @@
+name: 'Claude Stream Shim'
+description: |
+  Installs the claude CLI plus claude-stream, then emits a shim binary that
+  tees claude's stream-json stdout through claude-stream so the workflow
+  log shows a live chatroom view as Claude works. Designed to be paired
+  with anthropics/claude-code-action via path_to_claude_code_executable.
+
+  Usage:
+    - uses: nsheaps/github-actions/.github/actions/claude-stream-shim@<sha>
+      id: shim
+    - uses: anthropics/claude-code-action@v1
+      with:
+        path_to_claude_code_executable: ${{ steps.shim.outputs.shim-path }}
+        show_full_output: false  # raw JSON is suppressed; chatroom is live via shim
+
+author: 'nsheaps'
+
+branding:
+  icon: 'play-circle'
+  color: 'green'
+
+inputs:
+  claude-utils-version:
+    description: 'Tag of nsheaps/claude-utils to install (provides claude-stream). Without leading v.'
+    required: false
+    default: '0.12.13'
+  claude-code-version:
+    description: 'Version of @anthropic-ai/claude-code to install via npm. "latest" or a semver.'
+    required: false
+    default: 'latest'
+
+outputs:
+  shim-path:
+    description: 'Absolute path to the shim binary. Pass to claude-code-action.path_to_claude_code_executable.'
+    value: ${{ steps.shim.outputs.path }}
+  real-claude-path:
+    description: 'Absolute path to the underlying claude binary the shim invokes.'
+    value: ${{ steps.claude.outputs.path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install claude-stream from nsheaps/claude-utils
+      shell: bash
+      env:
+        VERSION: ${{ inputs.claude-utils-version }}
+      run: |
+        set -euo pipefail
+        REPO_DIR="${RUNNER_TEMP}/claude-utils"
+        if [ ! -d "$REPO_DIR" ]; then
+          git clone --depth 1 --branch "v${VERSION}" \
+            https://github.com/nsheaps/claude-utils.git "$REPO_DIR"
+        fi
+        # Make claude-stream available on PATH for the shim. The shim itself
+        # is NOT added to PATH (to avoid recursive resolution); only the
+        # claude-utils bin/ is.
+        echo "$REPO_DIR/bin" >> "$GITHUB_PATH"
+
+    - name: Install claude CLI
+      id: claude
+      shell: bash
+      env:
+        VERSION: ${{ inputs.claude-code-version }}
+      run: |
+        set -euo pipefail
+        npm install -g "@anthropic-ai/claude-code@${VERSION}"
+        REAL_CLAUDE="$(command -v claude)"
+        if [ -z "${REAL_CLAUDE:-}" ] || [ ! -x "$REAL_CLAUDE" ]; then
+          echo "::error::claude binary not found after npm install of @anthropic-ai/claude-code@${VERSION}"
+          exit 1
+        fi
+        echo "path=$REAL_CLAUDE" >> "$GITHUB_OUTPUT"
+        # Exported so the shim can find the real binary at invocation time.
+        echo "CLAUDE_STREAM_SHIM_REAL_CLAUDE=$REAL_CLAUDE" >> "$GITHUB_ENV"
+
+    - name: Write shim
+      id: shim
+      shell: bash
+      env:
+        REAL_CLAUDE: ${{ steps.claude.outputs.path }}
+      run: |
+        set -euo pipefail
+        SHIM_DIR="${RUNNER_TEMP}/claude-stream-shim"
+        mkdir -p "$SHIM_DIR"
+        SHIM="$SHIM_DIR/claude"
+        cat >"$SHIM" <<'SHIM_EOF'
+        #!/usr/bin/env bash
+        # Shim around the real claude CLI. Tees stream-json stdout through
+        # claude-stream so the GitHub Actions log renders a live chatroom
+        # view as Claude produces tokens. The action still parses the raw
+        # JSON from this shim's stdout exactly as before.
+        set -o pipefail
+
+        REAL="${CLAUDE_STREAM_SHIM_REAL_CLAUDE:-}"
+        if [ -z "$REAL" ] || [ ! -x "$REAL" ]; then
+          echo "claude-stream-shim: CLAUDE_STREAM_SHIM_REAL_CLAUDE not set or not executable; bypassing shim" >&2
+          # Locate claude on PATH excluding this shim's directory so we
+          # don't recurse if some caller mistakenly placed us on PATH.
+          SHIM_SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+          ALT_PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v "^${SHIM_SELF_DIR}$" | paste -sd: -)"
+          REAL="$(PATH="$ALT_PATH" command -v claude || true)"
+          if [ -z "$REAL" ]; then
+            echo "claude-stream-shim: no real claude binary found on PATH" >&2
+            exit 127
+          fi
+        fi
+
+        if ! command -v claude-stream >/dev/null 2>&1; then
+          # claude-stream missing: passthrough rather than fail the run.
+          echo "claude-stream-shim: claude-stream not on PATH; running claude without beautification" >&2
+          exec "$REAL" "$@"
+        fi
+
+        "$REAL" "$@" | tee >(claude-stream >&2)
+        exit "${PIPESTATUS[0]}"
+        SHIM_EOF
+        chmod +x "$SHIM"
+        echo "path=$SHIM" >> "$GITHUB_OUTPUT"
+        echo "claude-stream-shim ready: $SHIM -> $REAL_CLAUDE"
