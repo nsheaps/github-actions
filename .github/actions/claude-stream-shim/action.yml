@@ -3,15 +3,10 @@ description: |
   Installs the claude CLI plus claude-stream, then emits a shim binary that
   tees claude's stream-json stdout through claude-stream so the workflow
   log shows a live chatroom view as Claude works. Designed to be paired
-  with anthropics/claude-code-action via path_to_claude_code_executable.
-
-  Usage:
-    - uses: nsheaps/github-actions/.github/actions/claude-stream-shim@<sha>
-      id: shim
-    - uses: anthropics/claude-code-action@v1
-      with:
-        path_to_claude_code_executable: ${{ steps.shim.outputs.shim-path }}
-        show_full_output: false  # raw JSON is suppressed; chatroom is live via shim
+  with anthropics/claude-code-action via path_to_claude_code_executable;
+  set show_full_output to false on the underlying action so the raw JSON
+  dump is suppressed and only the chatroom view appears. See README for
+  the full usage example.
 
 author: 'nsheaps'
 
