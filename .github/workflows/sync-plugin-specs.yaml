@@ -1,0 +1,43 @@
+name: Sync Plugin Specs
+
+on:
+  workflow_call:
+    inputs:
+      plugins-dir:
+        description: 'Path to plugins directory'
+        type: string
+        required: false
+        default: 'plugins'
+      commit-message:
+        description: 'Auto-commit message'
+        type: string
+        required: false
+        default: 'chore(specs): auto-sync plugin SPEC.md files'
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/**/SKILL.md'
+      - 'plugins/**/hooks.json'
+      - 'plugins/**/rules/*.md'
+      - 'plugins/**/commands/*.md'
+      - 'plugins/**/agents/*.md'
+      - 'plugins/**/SPEC.md'
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync-specs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: nsheaps/github-actions/.github/actions/sync-plugin-specs@main
+        with:
+          plugins-dir: ${{ inputs.plugins-dir || 'plugins' }}
+          commit: 'true'
+          commit-message: ${{ inputs.commit-message || 'chore(specs): auto-sync plugin SPEC.md files' }}
