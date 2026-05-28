@@ -1,0 +1,79 @@
+name: 'Apply Repo Settings'
+description: 'Read .github/settings.yml and apply repository config + rulesets to a repo via the GitHub API. A minimal ephemeral alternative to the repository-settings GitHub App (https://github.com/repository-settings/app), suitable for running inside a workflow.'
+
+branding:
+  icon: 'sliders'
+  color: 'blue'
+
+inputs:
+  app-id:
+    description: 'GitHub App ID for the applier. Must have Administration:write on the target repo. See docs/setup.html in this action directory for an HTML helper that builds the app via the GitHub manifest flow.'
+    required: true
+
+  private-key:
+    description: 'GitHub App private key (PEM).'
+    required: true
+
+  owner:
+    description: 'Target repo owner. Defaults to the current repo owner.'
+    required: false
+    default: ${{ github.repository_owner }}
+
+  repo:
+    description: 'Target repo name. Defaults to the current repo.'
+    required: false
+    default: ${{ github.event.repository.name }}
+
+  settings-file:
+    description: 'Path to the YAML config to apply. Defaults to .github/settings.yml.'
+    required: false
+    default: '.github/settings.yml'
+
+  dry-run:
+    description: 'If true, print what would change without applying.'
+    required: false
+    default: 'false'
+
+  sections:
+    description: 'Comma-separated list of top-level keys to apply. Defaults to "repository,rulesets". Add others (labels, collaborators, teams) as we extend support.'
+    required: false
+    default: 'repository,rulesets'
+
+outputs:
+  summary:
+    description: 'JSON summary of changes applied. Keys: repository, rulesets_created, rulesets_updated, rulesets_unchanged.'
+    value: ${{ steps.apply.outputs.summary }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate App installation token
+      id: app-token
+      uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ inputs.owner }}
+        repositories: ${{ inputs.repo }}
+
+    - name: Ensure yq is available
+      shell: bash
+      run: |
+        if ! command -v yq >/dev/null 2>&1; then
+          echo "Installing yq..."
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+        fi
+        yq --version
+
+    - name: Apply settings
+      id: apply
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        OWNER: ${{ inputs.owner }}
+        REPO: ${{ inputs.repo }}
+        SETTINGS_FILE: ${{ inputs.settings-file }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        SECTIONS: ${{ inputs.sections }}
+      run: ${{ github.action_path }}/action.sh
