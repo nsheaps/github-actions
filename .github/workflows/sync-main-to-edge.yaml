@@ -1,0 +1,148 @@
+name: Sync main to edge (reusable)
+
+# Reusable workflow that reads the caller repo's `.gitupstream` config and
+# syncs the configured upstream branch (typically `main`) into one or more
+# target "edge" branches inside the SAME repo, using the
+# aormsby/Fork-Sync-With-Upstream-action marketplace action.
+#
+# Schema of .gitupstream (YAML, repo root, default branch):
+#   version: 1
+#   sync:
+#     - upstream: main
+#       targets:
+#         - alex/edge
+#         - jack/edge
+#
+# Multiple sync entries are supported; each entry's `targets` are expanded
+# into a job matrix.
+
+on:
+  workflow_call:
+    inputs:
+      config_path:
+        description: 'Path to the .gitupstream config file (relative to repo root)'
+        required: false
+        type: string
+        default: '.gitupstream'
+      test_mode:
+        description: 'Run the sync action in test mode (no push)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    name: Plan sync targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_targets: ${{ steps.plan.outputs.has_targets }}
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Install yq
+        env:
+          YQ_VERSION: v4.53.2
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Build matrix from .gitupstream
+        id: plan
+        env:
+          CONFIG_PATH: ${{ inputs.config_path }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$CONFIG_PATH" ]; then
+            echo "No $CONFIG_PATH file found; nothing to sync."
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            echo 'has_targets=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Flatten sync[*] entries into one row per (upstream, target).
+          # Each row -> {upstream, target}
+          MATRIX_JSON=$(
+            yq -o=json -I=0 '
+              {"include":
+                [.sync[]
+                 | . as $s
+                 | .targets[]
+                 | {"upstream": $s.upstream, "target": .}
+                ]
+              }
+            ' "$CONFIG_PATH"
+          )
+          echo "Computed matrix: $MATRIX_JSON"
+          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+
+          COUNT=$(echo "$MATRIX_JSON" | yq -p=json '.include | length')
+          if [ "$COUNT" -gt 0 ]; then
+            echo 'has_targets=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has_targets=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  sync:
+    name: Sync ${{ matrix.upstream }} -> ${{ matrix.target }}
+    needs: plan
+    if: needs.plan.outputs.has_targets == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      # The sync action expects the target branch to exist on the remote.
+      # If it does not (first run before any edge work), skip gracefully so
+      # the workflow stays green for repos that have not bootstrapped edge yet.
+      - name: Check target branch exists
+        id: check
+        env:
+          TARGET: ${{ matrix.target }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$REPO/branches/$TARGET" --silent 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Target branch '$TARGET' does not exist yet; skipping."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout target branch
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ matrix.target }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Sync upstream changes
+        if: steps.check.outputs.exists == 'true'
+        id: sync
+        uses: aormsby/Fork-Sync-With-Upstream-action@83d78e8c4bf524e79b091cf257deba4dee9e60df # v3.4.3
+        with:
+          target_sync_branch: ${{ matrix.target }}
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          upstream_sync_branch: ${{ matrix.upstream }}
+          upstream_sync_repo: ${{ github.repository }}
+          test_mode: ${{ inputs.test_mode }}
+
+      - name: Report
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          if [ "${{ steps.sync.outputs.has_new_commits }}" = "true" ]; then
+            echo "Synced new commits from ${{ matrix.upstream }} into ${{ matrix.target }}."
+          else
+            echo "${{ matrix.target }} already up-to-date with ${{ matrix.upstream }}."
+          fi
