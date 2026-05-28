@@ -10,15 +10,15 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 
 ## Inputs
 
-| Input | Required | Default | Description |
-| ----- | -------- | ------- | ----------- |
-| `app-id` | yes | — | GitHub App ID. Needs `Administration: write` and `Contents: read`. |
-| `private-key` | yes | — | The App's PEM private key. |
-| `owner` | no | current owner | Target repo owner. |
-| `repo` | no | current repo | Target repo name. |
-| `settings-file` | no | `.github/settings.yml` | Path to the YAML to apply. |
-| `dry-run` | no | `false` | Print what would change without applying. |
-| `sections` | no | `repository,rulesets` | Comma-separated section names to apply. |
+| Input           | Required | Default                | Description                                                        |
+| --------------- | -------- | ---------------------- | ------------------------------------------------------------------ |
+| `app-id`        | yes      | —                      | GitHub App ID. Needs `Administration: write` and `Contents: read`. |
+| `private-key`   | yes      | —                      | The App's PEM private key.                                         |
+| `owner`         | no       | current owner          | Target repo owner.                                                 |
+| `repo`          | no       | current repo           | Target repo name.                                                  |
+| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                         |
+| `dry-run`       | no       | `false`                | Print what would change without applying.                          |
+| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                            |
 
 ## Outputs
 
@@ -29,6 +29,7 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 Open [`docs/setup.html`](./docs/setup.html) (host it via GitHub Pages or any HTTPS static host) — it builds a [GitHub App manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) with exactly the permissions this action needs, walks you through registration on github.com, and exchanges the manifest code for the App ID + private key. Accordion sections in the page cover hosting choices and a no-manifest manual setup path.
 
 After creating the app:
+
 1. Install it on every repo you want to manage.
 2. Add `APPLY_REPO_SETTINGS_APP_ID` and `APPLY_REPO_SETTINGS_PRIVATE_KEY` as secrets.
 
