@@ -1,0 +1,60 @@
+name: 'Sync Plugin Specs'
+description: 'Bidirectionally sync plugin SPEC.md files with the filesystem. Adds missing spec entries from FS, creates placeholder files for missing FS items, and auto-generates SPEC.md if absent.'
+
+branding:
+  icon: 'refresh-cw'
+  color: 'blue'
+
+inputs:
+  plugins-dir:
+    description: 'Path to the plugins directory (relative to repo root)'
+    required: false
+    default: 'plugins'
+  commit:
+    description: 'Whether to auto-commit changes'
+    required: false
+    default: 'true'
+  commit-message:
+    description: 'Commit message for auto-commit'
+    required: false
+    default: 'chore(specs): sync plugin SPEC.md files with filesystem'
+
+outputs:
+  changes:
+    description: 'Whether any changes were made (true/false)'
+    value: ${{ steps.sync.outputs.changes }}
+  summary:
+    description: 'Human-readable summary of changes'
+    value: ${{ steps.sync.outputs.summary }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Sync plugin specs
+      id: sync
+      shell: bash
+      env:
+        PLUGINS_DIR: ${{ inputs.plugins-dir }}
+      run: |
+        "${{ github.action_path }}/sync.sh" 2>&1 | tee /tmp/sync-output.txt
+        SUMMARY=$(cat /tmp/sync-output.txt)
+        {
+          echo "summary<<EOF"
+          echo "$SUMMARY"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+        if grep -q "No changes needed" /tmp/sync-output.txt; then
+          echo "changes=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changes=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Commit changes
+      if: inputs.commit == 'true' && steps.sync.outputs.changes == 'true'
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -m "${{ inputs.commit-message }}"
+        git push
