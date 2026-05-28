@@ -26,7 +26,13 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 
 ## Setting up the GitHub App
 
-Open [`docs/setup.html`](./docs/setup.html) (host it via GitHub Pages or any HTTPS static host) — it builds a [GitHub App manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) with exactly the permissions this action needs, walks you through registration on github.com, and exchanges the manifest code for the App ID + private key. Accordion sections in the page cover hosting choices and a no-manifest manual setup path.
+Use the hosted setup helper:
+
+**→ https://nsheaps.github.io/github-actions/?preset=apply-repo-settings**
+
+It builds a [GitHub App manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) with exactly the permissions this action needs (`administration:write` + `contents:read` + `metadata:read`), submits to `github.com/.../apps/new`, then exchanges the returned code for the App ID + private key client-side. The page is generic — a dropdown selects which app to create (preset auto-selected via the `?preset=` qparam above; every form field also supports query-param prefill, e.g. `&org=nsheaps&appname=my-settings-app`). Accordion sections cover hosting, troubleshooting, and a no-manifest manual setup path.
+
+Source: [`pages/index.html`](../../../pages/index.html). Deployed by [`.github/workflows/pages.yaml`](../../workflows/pages.yaml).
 
 After creating the app:
 

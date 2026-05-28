@@ -1,0 +1,48 @@
+name: Deploy Pages
+
+# Publishes the static GitHub App setup helper at pages/index.html to
+# GitHub Pages. Lives at https://nsheaps.github.io/github-actions/.
+#
+# Note: enabling Pages itself is a one-time repo Settings → Pages step
+# (Source: "GitHub Actions"). This workflow runs the deploy once Pages
+# is enabled.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pages/**'
+      - '.github/workflows/pages.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # Only one deploy may be in-flight at a time; serial, not preempt.
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy pages/
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload pages/ artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
