@@ -29,6 +29,13 @@ on:
         required: false
         type: boolean
         default: false
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Run the sync action in test mode (no push)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
