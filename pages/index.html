@@ -1,371 +1,608 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<title>nsheaps/github-actions — GitHub App Setup</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body { font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 2rem 1.5rem; }
-  h1 { margin: 0 0 .25em; }
-  h2 { margin-top: 2rem; border-bottom: 1px solid #8884; padding-bottom: .25em; }
-  .sub { color: #888; margin-bottom: 1.5em; }
-  label { display: block; font-weight: 600; margin-top: 1em; }
-  input[type=text], input[type=url], textarea, select { width: 100%; font: 13px/1.4 ui-monospace, Consolas, monospace; padding: .55em .65em; border: 1px solid #8886; border-radius: 4px; background: #0001; color: inherit; }
-  select { padding: .5em; }
-  textarea { min-height: 6em; resize: vertical; font-size: 12px; }
-  button { font-size: 14px; padding: .55em 1.2em; border-radius: 6px; border: 1px solid #2f81f7; background: #2f81f7; color: white; cursor: pointer; margin-top: 1em; }
-  button.secondary { background: transparent; color: inherit; }
-  button:hover { filter: brightness(1.1); }
-  details { border: 1px solid #8884; border-radius: 6px; padding: .75em 1em; margin: .5em 0; }
-  details > summary { cursor: pointer; font-weight: 600; }
-  details[open] > summary { margin-bottom: .5em; }
-  code, pre { font-family: ui-monospace, Consolas, monospace; }
-  pre { background: #0001; padding: .75em 1em; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-  .ok { color: #1a7f37; }
-  .err { color: #cf222e; }
-  .hidden { display: none !important; }
-  .preset-info { background: #0001; border-left: 3px solid #2f81f7; padding: .75em 1em; margin: .5em 0 1em; border-radius: 0 6px 6px 0; font-size: 13px; }
-  .preset-info h3 { margin: 0 0 .35em; font-size: 14px; }
-  .preset-info ul { margin: .35em 0 0 1.2em; padding: 0; }
-  kbd { background: #0001; border: 1px solid #8886; border-radius: 3px; padding: 0 .3em; font: 12px ui-monospace, monospace; }
-  .field-hint { font-weight: 400; color: #888; font-size: 12px; }
-</style>
-</head>
-<body>
+  <head>
+    <meta charset="utf-8" />
+    <title>nsheaps/github-actions — GitHub App Setup</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font:
+          14px/1.55 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Helvetica,
+          Arial,
+          sans-serif;
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+      }
+      h1 {
+        margin: 0 0 0.25em;
+      }
+      h2 {
+        margin-top: 2rem;
+        border-bottom: 1px solid #8884;
+        padding-bottom: 0.25em;
+      }
+      .sub {
+        color: #888;
+        margin-bottom: 1.5em;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-top: 1em;
+      }
+      input[type='text'],
+      input[type='url'],
+      textarea,
+      select {
+        width: 100%;
+        font:
+          13px/1.4 ui-monospace,
+          Consolas,
+          monospace;
+        padding: 0.55em 0.65em;
+        border: 1px solid #8886;
+        border-radius: 4px;
+        background: #0001;
+        color: inherit;
+      }
+      select {
+        padding: 0.5em;
+      }
+      textarea {
+        min-height: 6em;
+        resize: vertical;
+        font-size: 12px;
+      }
+      button {
+        font-size: 14px;
+        padding: 0.55em 1.2em;
+        border-radius: 6px;
+        border: 1px solid #2f81f7;
+        background: #2f81f7;
+        color: white;
+        cursor: pointer;
+        margin-top: 1em;
+      }
+      button.secondary {
+        background: transparent;
+        color: inherit;
+      }
+      button:hover {
+        filter: brightness(1.1);
+      }
+      details {
+        border: 1px solid #8884;
+        border-radius: 6px;
+        padding: 0.75em 1em;
+        margin: 0.5em 0;
+      }
+      details > summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      details[open] > summary {
+        margin-bottom: 0.5em;
+      }
+      code,
+      pre {
+        font-family: ui-monospace, Consolas, monospace;
+      }
+      pre {
+        background: #0001;
+        padding: 0.75em 1em;
+        border-radius: 4px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .ok {
+        color: #1a7f37;
+      }
+      .err {
+        color: #cf222e;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .preset-info {
+        background: #0001;
+        border-left: 3px solid #2f81f7;
+        padding: 0.75em 1em;
+        margin: 0.5em 0 1em;
+        border-radius: 0 6px 6px 0;
+        font-size: 13px;
+      }
+      .preset-info h3 {
+        margin: 0 0 0.35em;
+        font-size: 14px;
+      }
+      .preset-info ul {
+        margin: 0.35em 0 0 1.2em;
+        padding: 0;
+      }
+      kbd {
+        background: #0001;
+        border: 1px solid #8886;
+        border-radius: 3px;
+        padding: 0 0.3em;
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+      .field-hint {
+        font-weight: 400;
+        color: #888;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GitHub App Setup</h1>
+    <p class="sub">
+      Builds a
+      <a
+        href="https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"
+        target="_blank"
+        rel="noopener"
+        >GitHub App manifest</a
+      >
+      for one of the apps below, walks through registration on github.com, and exchanges the
+      manifest code for the new App's credentials client-side.
+    </p>
 
-<h1>GitHub App Setup</h1>
-<p class="sub">
-  Builds a <a href="https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest" target="_blank" rel="noopener">GitHub App manifest</a> for one of the apps below, walks through registration on github.com, and exchanges the manifest code for the new App's credentials client-side.
-</p>
+    <form id="form" autocomplete="off">
+      <label for="preset">
+        App preset
+        <span class="field-hint"
+          >— pick what the app is for; preselected by <code>?preset=&lt;id&gt;</code></span
+        >
+      </label>
+      <select id="preset" name="preset" required>
+        <option value="" disabled selected>— choose one —</option>
+      </select>
 
-<form id="form" autocomplete="off">
+      <div id="preset-info" class="preset-info hidden"></div>
 
-  <label for="preset">
-    App preset
-    <span class="field-hint">— pick what the app is for; preselected by <code>?preset=&lt;id&gt;</code></span>
-  </label>
-  <select id="preset" name="preset" required>
-    <option value="" disabled selected>— choose one —</option>
-  </select>
+      <label for="org">
+        GitHub organization (or user)
+        <span class="field-hint">— prefill via <code>?org=...</code></span>
+      </label>
+      <input type="text" id="org" name="org" placeholder="nsheaps" required />
 
-  <div id="preset-info" class="preset-info hidden"></div>
+      <label for="appname">
+        App name
+        <span class="field-hint"
+          >— must be globally unique on github.com; prefill via <code>?appname=...</code></span
+        >
+      </label>
+      <input
+        type="text"
+        id="appname"
+        name="appname"
+        placeholder="(auto-filled from preset)"
+        required
+      />
 
-  <label for="org">
-    GitHub organization (or user)
-    <span class="field-hint">— prefill via <code>?org=...</code></span>
-  </label>
-  <input type="text" id="org" name="org" placeholder="nsheaps" required>
+      <label for="redirect">
+        Redirect URL
+        <span class="field-hint"
+          >— must be HTTPS; defaults to this page; prefill via <code>?redirect=...</code></span
+        >
+      </label>
+      <input type="url" id="redirect" name="redirect" required />
 
-  <label for="appname">
-    App name
-    <span class="field-hint">— must be globally unique on github.com; prefill via <code>?appname=...</code></span>
-  </label>
-  <input type="text" id="appname" name="appname" placeholder="(auto-filled from preset)" required>
+      <details>
+        <summary>Why does redirect URL have to be this page?</summary>
+        <p>
+          GitHub creates the app, then redirects to the URL you give it with a
+          <code>?code=…</code> query parameter. That code is good for ~1 hour and can be exchanged
+          once for the new app's ID, private key, and webhook secret. This page exchanges it
+          client-side via <code>POST /app-manifests/{code}/conversions</code> and shows you the
+          credentials to copy.
+        </p>
+        <p>
+          If you'd rather host this page elsewhere, copy <code>pages/index.html</code> into any
+          HTTPS-served location and use that URL here. <code>file://</code> won't work — GitHub
+          requires HTTPS.
+        </p>
+      </details>
 
-  <label for="redirect">
-    Redirect URL
-    <span class="field-hint">— must be HTTPS; defaults to this page; prefill via <code>?redirect=...</code></span>
-  </label>
-  <input type="url" id="redirect" name="redirect" required>
+      <button type="submit">Build manifest & create app on GitHub →</button>
+    </form>
 
-  <details>
-    <summary>Why does redirect URL have to be this page?</summary>
-    <p>GitHub creates the app, then redirects to the URL you give it with a <code>?code=…</code> query parameter. That code is good for ~1 hour and can be exchanged once for the new app's ID, private key, and webhook secret. This page exchanges it client-side via <code>POST /app-manifests/{code}/conversions</code> and shows you the credentials to copy.</p>
-    <p>If you'd rather host this page elsewhere, copy <code>pages/index.html</code> into any HTTPS-served location and use that URL here. <code>file://</code> won't work — GitHub requires HTTPS.</p>
-  </details>
+    <form id="manifestform" method="post" class="hidden">
+      <input type="hidden" name="manifest" id="manifestpayload" />
+    </form>
 
-  <button type="submit">Build manifest & create app on GitHub →</button>
-</form>
+    <div id="exchange" class="hidden">
+      <h2>App created — exchanging code for credentials…</h2>
+      <pre id="exchangelog"></pre>
+    </div>
 
-<form id="manifestform" method="post" class="hidden">
-  <input type="hidden" name="manifest" id="manifestpayload">
-</form>
+    <div id="creds" class="hidden">
+      <h2 class="ok">✓ App credentials</h2>
+      <p>
+        Save these to <strong>repository</strong> or <strong>organization</strong> secrets. The
+        private key in particular <em>cannot be retrieved again</em> — generate a new one if you
+        lose it.
+      </p>
 
-<div id="exchange" class="hidden">
-  <h2>App created — exchanging code for credentials…</h2>
-  <pre id="exchangelog"></pre>
-</div>
+      <label
+        >App ID <span class="field-hint">→ secret <code id="secret-name-id"></code></span
+      ></label>
+      <input type="text" id="out-app-id" readonly />
 
-<div id="creds" class="hidden">
-  <h2 class="ok">✓ App credentials</h2>
-  <p>Save these to <strong>repository</strong> or <strong>organization</strong> secrets. The private key in particular <em>cannot be retrieved again</em> — generate a new one if you lose it.</p>
+      <label
+        >Private key (PEM)
+        <span class="field-hint">→ secret <code id="secret-name-key"></code></span
+      ></label>
+      <textarea id="out-private-key" readonly></textarea>
 
-  <label>App ID <span class="field-hint">→ secret <code id="secret-name-id"></code></span></label>
-  <input type="text" id="out-app-id" readonly>
+      <label>Webhook secret <span class="field-hint">(unused — store anyway)</span></label>
+      <input type="text" id="out-webhook-secret" readonly />
 
-  <label>Private key (PEM) <span class="field-hint">→ secret <code id="secret-name-key"></code></span></label>
-  <textarea id="out-private-key" readonly></textarea>
+      <p>App page on GitHub: <a id="out-html-url" target="_blank" rel="noopener"></a></p>
 
-  <label>Webhook secret <span class="field-hint">(unused — store anyway)</span></label>
-  <input type="text" id="out-webhook-secret" readonly>
+      <h2>Next steps</h2>
+      <ol id="next-steps"></ol>
 
-  <p>App page on GitHub: <a id="out-html-url" target="_blank" rel="noopener"></a></p>
+      <button
+        type="button"
+        class="secondary"
+        onclick="
+          location.search = ''
+          location.reload()
+        "
+      >
+        Start over
+      </button>
+    </div>
 
-  <h2>Next steps</h2>
-  <ol id="next-steps"></ol>
+    <div id="errbox" class="hidden">
+      <h2 class="err">Something went wrong</h2>
+      <pre id="errlog"></pre>
+      <button
+        type="button"
+        class="secondary"
+        onclick="
+          location.search = ''
+          location.reload()
+        "
+      >
+        Try again
+      </button>
+    </div>
 
-  <button type="button" class="secondary" onclick="location.search='';location.reload()">Start over</button>
-</div>
+    <h2>Detailed setup walkthrough</h2>
 
-<div id="errbox" class="hidden">
-  <h2 class="err">Something went wrong</h2>
-  <pre id="errlog"></pre>
-  <button type="button" class="secondary" onclick="location.search='';location.reload()">Try again</button>
-</div>
+    <details>
+      <summary>What's a GitHub App manifest, and what does the page do?</summary>
+      <p>
+        The page builds a JSON manifest declaring the new app's name, redirect URL, default
+        permissions, and webhook events — then POSTs it to
+        <code>github.com/organizations/&lt;org&gt;/settings/apps/new</code>. GitHub creates the app
+        and redirects back to this page with a temporary <code>code</code>. The page then calls
+        <code>POST https://api.github.com/app-manifests/&lt;code&gt;/conversions</code> from your
+        browser to retrieve the new app's ID, private key, and webhook secret.
+      </p>
+      <p>
+        Reference:
+        <a
+          href="https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest"
+          target="_blank"
+          rel="noopener"
+          >Registering a GitHub App from a manifest</a
+        >.
+      </p>
+    </details>
 
-<h2>Detailed setup walkthrough</h2>
+    <details>
+      <summary>How do I host this page so it works as the redirect URL?</summary>
+      <p>
+        For nsheaps repos this page is auto-deployed via GitHub Pages from
+        <a
+          href="https://github.com/nsheaps/github-actions/tree/main/pages"
+          target="_blank"
+          rel="noopener"
+          ><code>nsheaps/github-actions/pages/</code></a
+        >. For your own host:
+      </p>
+      <pre>
+cp pages/index.html docs/index.html
+# Settings → Pages → Source: GitHub Actions (or branch /docs)</pre
+      >
+      <p>
+        Then use <code>https://&lt;your-org&gt;.github.io/&lt;repo&gt;/</code> as the redirect. Any
+        other HTTPS static host (Vercel, Netlify, etc.) works equally well.
+      </p>
+    </details>
 
-<details>
-  <summary>What's a GitHub App manifest, and what does the page do?</summary>
-  <p>The page builds a JSON manifest declaring the new app's name, redirect URL, default permissions, and webhook events — then POSTs it to <code>github.com/organizations/&lt;org&gt;/settings/apps/new</code>. GitHub creates the app and redirects back to this page with a temporary <code>code</code>. The page then calls <code>POST https://api.github.com/app-manifests/&lt;code&gt;/conversions</code> from your browser to retrieve the new app's ID, private key, and webhook secret.</p>
-  <p>Reference: <a href="https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest" target="_blank" rel="noopener">Registering a GitHub App from a manifest</a>.</p>
-</details>
+    <details>
+      <summary>I get "Manifest is invalid" from GitHub after clicking the button</summary>
+      <p>
+        Open DevTools, find the manifest payload in the form before submission, and validate it
+        against
+        <a
+          href="https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest#github-app-manifest-parameters"
+          target="_blank"
+          rel="noopener"
+          >GitHub's manifest schema</a
+        >. Common gotchas:
+      </p>
+      <ul>
+        <li><code>url</code> and <code>redirect_url</code> must be HTTPS.</li>
+        <li>App name must be unique on github.com — try a more specific name.</li>
+        <li>If the org is restricted to specific apps, the org owner has to approve creation.</li>
+      </ul>
+    </details>
 
-<details>
-  <summary>How do I host this page so it works as the redirect URL?</summary>
-  <p>For nsheaps repos this page is auto-deployed via GitHub Pages from <a href="https://github.com/nsheaps/github-actions/tree/main/pages" target="_blank" rel="noopener"><code>nsheaps/github-actions/pages/</code></a>. For your own host:</p>
-  <pre>cp pages/index.html docs/index.html
-# Settings → Pages → Source: GitHub Actions (or branch /docs)</pre>
-  <p>Then use <code>https://&lt;your-org&gt;.github.io/&lt;repo&gt;/</code> as the redirect. Any other HTTPS static host (Vercel, Netlify, etc.) works equally well.</p>
-</details>
+    <details>
+      <summary>I lost the code. Can I get the private key again?</summary>
+      <p>
+        No — GitHub only shows the private key once via the manifest exchange. Regenerate one from
+        the app settings: <strong>Private keys → Generate a private key</strong>. The old key is
+        invalidated; update the secret.
+      </p>
+    </details>
 
-<details>
-  <summary>I get "Manifest is invalid" from GitHub after clicking the button</summary>
-  <p>Open DevTools, find the manifest payload in the form before submission, and validate it against <a href="https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest#github-app-manifest-parameters" target="_blank" rel="noopener">GitHub's manifest schema</a>. Common gotchas:</p>
-  <ul>
-    <li><code>url</code> and <code>redirect_url</code> must be HTTPS.</li>
-    <li>App name must be unique on github.com — try a more specific name.</li>
-    <li>If the org is restricted to specific apps, the org owner has to approve creation.</li>
-  </ul>
-</details>
+    <details>
+      <summary>Manual install (no manifest flow)</summary>
+      <ol>
+        <li>
+          Go to <kbd>Org Settings</kbd> → <kbd>Developer settings</kbd> → <kbd>GitHub Apps</kbd> →
+          <strong>New GitHub App</strong>.
+        </li>
+        <li>
+          Name it (anything globally unique). Homepage URL:
+          <code>https://github.com/&lt;org&gt;</code> works.
+        </li>
+        <li>Uncheck "Active" under Webhook unless your preset needs webhooks.</li>
+        <li>
+          Set permissions matching the preset's
+          <em>What permissions does this app grant?</em> section.
+        </li>
+        <li>Where can this be installed: Only on this account (or Any account if shareable).</li>
+        <li>Create. Note the App ID, generate a private key.</li>
+        <li>Install it on the repos you want to manage.</li>
+      </ol>
+    </details>
 
-<details>
-  <summary>I lost the code. Can I get the private key again?</summary>
-  <p>No — GitHub only shows the private key once via the manifest exchange. Regenerate one from the app settings: <strong>Private keys → Generate a private key</strong>. The old key is invalidated; update the secret.</p>
-</details>
+    <details>
+      <summary>How do query-param prefills work?</summary>
+      <p>
+        Any form field on this page can be prefilled by appending matching query parameters to the
+        URL. Field names are listed under each input.
+      </p>
+      <p>Examples:</p>
+      <ul>
+        <li><code>?preset=apply-repo-settings</code> — selects a preset</li>
+        <li>
+          <code>?preset=apply-repo-settings&amp;org=nsheaps&amp;appname=my-settings-app</code> —
+          selects preset + prefills org + name
+        </li>
+        <li><code>?redirect=https://example.com/cb</code> — overrides redirect URL</li>
+      </ul>
+      <p>
+        The mechanism is generic: every <code>&lt;input&gt;</code> / <code>&lt;select&gt;</code> /
+        <code>&lt;textarea&gt;</code> with a <code>name</code> attribute is candidate. Adding new
+        fields later auto-supports the same prefill pattern.
+      </p>
+    </details>
 
-<details>
-  <summary>Manual install (no manifest flow)</summary>
-  <ol>
-    <li>Go to <kbd>Org Settings</kbd> → <kbd>Developer settings</kbd> → <kbd>GitHub Apps</kbd> → <strong>New GitHub App</strong>.</li>
-    <li>Name it (anything globally unique). Homepage URL: <code>https://github.com/&lt;org&gt;</code> works.</li>
-    <li>Uncheck "Active" under Webhook unless your preset needs webhooks.</li>
-    <li>Set permissions matching the preset's <em>What permissions does this app grant?</em> section.</li>
-    <li>Where can this be installed: Only on this account (or Any account if shareable).</li>
-    <li>Create. Note the App ID, generate a private key.</li>
-    <li>Install it on the repos you want to manage.</li>
-  </ol>
-</details>
+    <script>
+      //
+      // --- App preset registry ---------------------------------------------------
+      // Each preset describes a GitHub App that this page knows how to create.
+      // To add a new app, add an entry here. No other code changes required.
+      //
+      const PRESETS = {
+        'apply-repo-settings': {
+          label: 'apply-repo-settings (rulesets + repo config)',
+          description:
+            'Ephemeral in-workflow alternative to the repository-settings GitHub App. Used by the apply-repo-settings action in nsheaps/github-actions to apply .github/settings.yml via the GitHub API.',
+          defaultAppName: 'apply-repo-settings',
+          secretName: {
+            id: 'APPLY_REPO_SETTINGS_APP_ID',
+            key: 'APPLY_REPO_SETTINGS_PRIVATE_KEY',
+          },
+          manifest: {
+            public: false,
+            default_permissions: {
+              administration: 'write',
+              contents: 'read',
+              metadata: 'read',
+            },
+            default_events: [],
+          },
+          permissionsBlurb: [
+            ['Administration: write', 'Manage repo config + rulesets'],
+            ['Contents: read', 'Read .github/settings.yml'],
+            ['Metadata: read', 'Implicit (all apps)'],
+          ],
+          nextSteps: (htmlUrl) => [
+            `Open the app at <a href="${htmlUrl}" target="_blank" rel="noopener">${htmlUrl}</a> and click <strong>Install App</strong>. Install it on every repo you want managed.`,
+            'Add the App ID + private key as repo or org secrets using the names shown above.',
+            'Add a workflow that uses <code>nsheaps/github-actions/.github/actions/apply-repo-settings@main</code>. See the <a href="https://github.com/nsheaps/github-actions/tree/main/.github/actions/apply-repo-settings#example-workflow" target="_blank" rel="noopener">README example</a>.',
+          ],
+        },
+        // Add more presets here as new apps are introduced.
+      }
 
-<details>
-  <summary>How do query-param prefills work?</summary>
-  <p>Any form field on this page can be prefilled by appending matching query parameters to the URL. Field names are listed under each input.</p>
-  <p>Examples:</p>
-  <ul>
-    <li><code>?preset=apply-repo-settings</code> — selects a preset</li>
-    <li><code>?preset=apply-repo-settings&amp;org=nsheaps&amp;appname=my-settings-app</code> — selects preset + prefills org + name</li>
-    <li><code>?redirect=https://example.com/cb</code> — overrides redirect URL</li>
-  </ul>
-  <p>The mechanism is generic: every <code>&lt;input&gt;</code> / <code>&lt;select&gt;</code> / <code>&lt;textarea&gt;</code> with a <code>name</code> attribute is candidate. Adding new fields later auto-supports the same prefill pattern.</p>
-</details>
+      //
+      // --- Generic qparam → form prefill -----------------------------------------
+      // Reads URLSearchParams and writes matching values into any form control
+      // with a matching `name` or `id`. Supports text/url/select/textarea/checkbox.
+      //
+      function applyQParams(skipKeys = new Set()) {
+        const params = new URLSearchParams(location.search)
+        params.forEach((value, key) => {
+          if (skipKeys.has(key)) return
+          const el = document.querySelector(`[name="${CSS.escape(key)}"], #${CSS.escape(key)}`)
+          if (!el) return
+          if (el.type === 'checkbox' || el.type === 'radio') {
+            el.checked = ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
+          } else if (el.tagName === 'SELECT') {
+            el.value = value
+            el.dispatchEvent(new Event('change', { bubbles: true }))
+          } else {
+            el.value = value
+          }
+        })
+      }
 
-<script>
-//
-// --- App preset registry ---------------------------------------------------
-// Each preset describes a GitHub App that this page knows how to create.
-// To add a new app, add an entry here. No other code changes required.
-//
-const PRESETS = {
-  'apply-repo-settings': {
-    label: 'apply-repo-settings (rulesets + repo config)',
-    description: 'Ephemeral in-workflow alternative to the repository-settings GitHub App. Used by the apply-repo-settings action in nsheaps/github-actions to apply .github/settings.yml via the GitHub API.',
-    defaultAppName: 'apply-repo-settings',
-    secretName: {
-      id: 'APPLY_REPO_SETTINGS_APP_ID',
-      key: 'APPLY_REPO_SETTINGS_PRIVATE_KEY',
-    },
-    manifest: {
-      public: false,
-      default_permissions: {
-        administration: 'write',
-        contents: 'read',
-        metadata: 'read',
-      },
-      default_events: [],
-    },
-    permissionsBlurb: [
-      ['Administration: write', 'Manage repo config + rulesets'],
-      ['Contents: read',        'Read .github/settings.yml'],
-      ['Metadata: read',        'Implicit (all apps)'],
-    ],
-    nextSteps: (htmlUrl) => [
-      `Open the app at <a href="${htmlUrl}" target="_blank" rel="noopener">${htmlUrl}</a> and click <strong>Install App</strong>. Install it on every repo you want managed.`,
-      'Add the App ID + private key as repo or org secrets using the names shown above.',
-      'Add a workflow that uses <code>nsheaps/github-actions/.github/actions/apply-repo-settings@main</code>. See the <a href="https://github.com/nsheaps/github-actions/tree/main/.github/actions/apply-repo-settings#example-workflow" target="_blank" rel="noopener">README example</a>.',
-    ],
-  },
-  // Add more presets here as new apps are introduced.
-};
+      //
+      // --- Preset selector wiring ------------------------------------------------
+      //
+      function populatePresetDropdown() {
+        const sel = document.getElementById('preset')
+        for (const [id, p] of Object.entries(PRESETS)) {
+          const opt = document.createElement('option')
+          opt.value = id
+          opt.textContent = p.label
+          sel.appendChild(opt)
+        }
+      }
 
-//
-// --- Generic qparam → form prefill -----------------------------------------
-// Reads URLSearchParams and writes matching values into any form control
-// with a matching `name` or `id`. Supports text/url/select/textarea/checkbox.
-//
-function applyQParams(skipKeys = new Set()) {
-  const params = new URLSearchParams(location.search);
-  params.forEach((value, key) => {
-    if (skipKeys.has(key)) return;
-    const el = document.querySelector(`[name="${CSS.escape(key)}"], #${CSS.escape(key)}`);
-    if (!el) return;
-    if (el.type === 'checkbox' || el.type === 'radio') {
-      el.checked = ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
-    } else if (el.tagName === 'SELECT') {
-      el.value = value;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    } else {
-      el.value = value;
-    }
-  });
-}
-
-//
-// --- Preset selector wiring ------------------------------------------------
-//
-function populatePresetDropdown() {
-  const sel = document.getElementById('preset');
-  for (const [id, p] of Object.entries(PRESETS)) {
-    const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = p.label;
-    sel.appendChild(opt);
-  }
-}
-
-function renderPresetInfo(presetId) {
-  const box = document.getElementById('preset-info');
-  if (!presetId || !PRESETS[presetId]) {
-    box.classList.add('hidden');
-    return;
-  }
-  const p = PRESETS[presetId];
-  box.classList.remove('hidden');
-  box.innerHTML = `
+      function renderPresetInfo(presetId) {
+        const box = document.getElementById('preset-info')
+        if (!presetId || !PRESETS[presetId]) {
+          box.classList.add('hidden')
+          return
+        }
+        const p = PRESETS[presetId]
+        box.classList.remove('hidden')
+        box.innerHTML = `
     <h3>${p.label}</h3>
     <p>${p.description}</p>
     <p><strong>Permissions granted:</strong></p>
     <ul>${p.permissionsBlurb.map(([k, v]) => `<li><code>${k}</code> — ${v}</li>`).join('')}</ul>
-  `;
-  // If appname is blank, suggest the preset default
-  const appname = document.getElementById('appname');
-  if (!appname.value) appname.value = p.defaultAppName;
-}
+  `
+        // If appname is blank, suggest the preset default
+        const appname = document.getElementById('appname')
+        if (!appname.value) appname.value = p.defaultAppName
+      }
 
-document.getElementById('preset').addEventListener('change', e => {
-  renderPresetInfo(e.target.value);
-});
+      document.getElementById('preset').addEventListener('change', (e) => {
+        renderPresetInfo(e.target.value)
+      })
 
-//
-// --- Default the redirect URL to this page ---------------------------------
-//
-function defaultRedirect() {
-  // Strip code/state/etc. that may have come from a previous round-trip
-  const url = new URL(location.href);
-  ['code', 'state'].forEach(k => url.searchParams.delete(k));
-  return url.toString();
-}
-document.getElementById('redirect').value = defaultRedirect();
+      //
+      // --- Default the redirect URL to this page ---------------------------------
+      //
+      function defaultRedirect() {
+        // Strip code/state/etc. that may have come from a previous round-trip
+        const url = new URL(location.href)
+        ;['code', 'state'].forEach((k) => url.searchParams.delete(k))
+        return url.toString()
+      }
+      document.getElementById('redirect').value = defaultRedirect()
 
-//
-// --- Init: populate dropdown, then apply qparams ---------------------------
-//
-populatePresetDropdown();
-applyQParams();   // qparams overwrite the default redirect if user passed ?redirect=
-renderPresetInfo(document.getElementById('preset').value);
+      //
+      // --- Init: populate dropdown, then apply qparams ---------------------------
+      //
+      populatePresetDropdown()
+      applyQParams() // qparams overwrite the default redirect if user passed ?redirect=
+      renderPresetInfo(document.getElementById('preset').value)
 
-//
-// --- 1. Build manifest + post to github.com/.../apps/new ------------------
-//
-document.getElementById('form').addEventListener('submit', e => {
-  e.preventDefault();
-  const org = document.getElementById('org').value.trim();
-  const name = document.getElementById('appname').value.trim();
-  const redirect = document.getElementById('redirect').value.trim();
-  const presetId = document.getElementById('preset').value;
-  if (!presetId) { alert('Choose an app preset.'); return; }
-  if (!org || !name || !redirect) return;
-  if (!/^https:\/\//.test(redirect)) {
-    alert('Redirect URL must start with https://');
-    return;
-  }
-  const preset = PRESETS[presetId];
+      //
+      // --- 1. Build manifest + post to github.com/.../apps/new ------------------
+      //
+      document.getElementById('form').addEventListener('submit', (e) => {
+        e.preventDefault()
+        const org = document.getElementById('org').value.trim()
+        const name = document.getElementById('appname').value.trim()
+        const redirect = document.getElementById('redirect').value.trim()
+        const presetId = document.getElementById('preset').value
+        if (!presetId) {
+          alert('Choose an app preset.')
+          return
+        }
+        if (!org || !name || !redirect) return
+        if (!/^https:\/\//.test(redirect)) {
+          alert('Redirect URL must start with https://')
+          return
+        }
+        const preset = PRESETS[presetId]
 
-  const manifest = {
-    name,
-    url: redirect,
-    redirect_url: redirect,
-    ...preset.manifest,
-  };
+        const manifest = {
+          name,
+          url: redirect,
+          redirect_url: redirect,
+          ...preset.manifest,
+        }
 
-  // Persist the preset across the round-trip via `state`
-  const state = `preset=${encodeURIComponent(presetId)}`;
-  sessionStorage.setItem('lastPreset', presetId);
+        // Persist the preset across the round-trip via `state`
+        const state = `preset=${encodeURIComponent(presetId)}`
+        sessionStorage.setItem('lastPreset', presetId)
 
-  const f = document.getElementById('manifestform');
-  f.action = `https://github.com/organizations/${encodeURIComponent(org)}/settings/apps/new?state=${state}`;
-  document.getElementById('manifestpayload').value = JSON.stringify(manifest);
-  f.submit();
-});
+        const f = document.getElementById('manifestform')
+        f.action = `https://github.com/organizations/${encodeURIComponent(org)}/settings/apps/new?state=${state}`
+        document.getElementById('manifestpayload').value = JSON.stringify(manifest)
+        f.submit()
+      })
 
-//
-// --- 2. On return with ?code=..., exchange + show creds --------------------
-//
-const params = new URLSearchParams(location.search);
-const code = params.get('code');
-if (code) {
-  // Try to recover preset from state, then sessionStorage, then qparam
-  const stateRaw = params.get('state') || '';
-  const stateMatch = stateRaw.match(/preset=([^&]+)/);
-  const presetId =
-    (stateMatch && decodeURIComponent(stateMatch[1])) ||
-    sessionStorage.getItem('lastPreset') ||
-    params.get('preset') || '';
+      //
+      // --- 2. On return with ?code=..., exchange + show creds --------------------
+      //
+      const params = new URLSearchParams(location.search)
+      const code = params.get('code')
+      if (code) {
+        // Try to recover preset from state, then sessionStorage, then qparam
+        const stateRaw = params.get('state') || ''
+        const stateMatch = stateRaw.match(/preset=([^&]+)/)
+        const presetId =
+          (stateMatch && decodeURIComponent(stateMatch[1])) ||
+          sessionStorage.getItem('lastPreset') ||
+          params.get('preset') ||
+          ''
 
-  document.getElementById('form').classList.add('hidden');
-  document.getElementById('exchange').classList.remove('hidden');
-  const log = document.getElementById('exchangelog');
-  log.textContent = 'POST https://api.github.com/app-manifests/' + code + '/conversions ...';
+        document.getElementById('form').classList.add('hidden')
+        document.getElementById('exchange').classList.remove('hidden')
+        const log = document.getElementById('exchangelog')
+        log.textContent = 'POST https://api.github.com/app-manifests/' + code + '/conversions ...'
 
-  fetch(`https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`, {
-    method: 'POST',
-    headers: { 'Accept': 'application/vnd.github+json' }
-  })
-    .then(r => r.json().then(j => ({ status: r.status, body: j })))
-    .then(({ status, body }) => {
-      if (status >= 400) throw new Error(`HTTP ${status}: ${body.message || JSON.stringify(body)}`);
-      document.getElementById('exchange').classList.add('hidden');
-      document.getElementById('creds').classList.remove('hidden');
-      document.getElementById('out-app-id').value = body.id;
-      document.getElementById('out-private-key').value = body.pem;
-      document.getElementById('out-webhook-secret').value = body.webhook_secret || '(none)';
-      const link = document.getElementById('out-html-url');
-      link.textContent = body.html_url;
-      link.href = body.html_url;
+        fetch(`https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`, {
+          method: 'POST',
+          headers: { Accept: 'application/vnd.github+json' },
+        })
+          .then((r) => r.json().then((j) => ({ status: r.status, body: j })))
+          .then(({ status, body }) => {
+            if (status >= 400)
+              throw new Error(`HTTP ${status}: ${body.message || JSON.stringify(body)}`)
+            document.getElementById('exchange').classList.add('hidden')
+            document.getElementById('creds').classList.remove('hidden')
+            document.getElementById('out-app-id').value = body.id
+            document.getElementById('out-private-key').value = body.pem
+            document.getElementById('out-webhook-secret').value = body.webhook_secret || '(none)'
+            const link = document.getElementById('out-html-url')
+            link.textContent = body.html_url
+            link.href = body.html_url
 
-      const preset = PRESETS[presetId] || Object.values(PRESETS)[0];
-      document.getElementById('secret-name-id').textContent = preset.secretName.id;
-      document.getElementById('secret-name-key').textContent = preset.secretName.key;
-      const ol = document.getElementById('next-steps');
-      ol.innerHTML = preset.nextSteps(body.html_url).map(s => `<li>${s}</li>`).join('');
-    })
-    .catch(err => {
-      document.getElementById('exchange').classList.add('hidden');
-      document.getElementById('errbox').classList.remove('hidden');
-      document.getElementById('errlog').textContent = String(err);
-    });
-}
-</script>
-</body>
+            const preset = PRESETS[presetId] || Object.values(PRESETS)[0]
+            document.getElementById('secret-name-id').textContent = preset.secretName.id
+            document.getElementById('secret-name-key').textContent = preset.secretName.key
+            const ol = document.getElementById('next-steps')
+            ol.innerHTML = preset
+              .nextSteps(body.html_url)
+              .map((s) => `<li>${s}</li>`)
+              .join('')
+          })
+          .catch((err) => {
+            document.getElementById('exchange').classList.add('hidden')
+            document.getElementById('errbox').classList.remove('hidden')
+            document.getElementById('errlog').textContent = String(err)
+          })
+      }
+    </script>
+  </body>
 </html>
