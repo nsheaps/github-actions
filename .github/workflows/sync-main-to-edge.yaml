@@ -162,9 +162,8 @@ jobs:
             echo "PR #$existing already open for $UPSTREAM -> $TARGET; nothing to do."
             exit 0
           fi
-          BODY="Automated sync could not fast-forward \`$TARGET\` from \`$UPSTREAM\` (diverged history or branch protection). Merging via PR instead.
-
-Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="Automated sync could not fast-forward \`$TARGET\` from \`$UPSTREAM\` (diverged history or branch protection). Merging via PR instead.\
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           gh pr create --repo "$REPO" --base "$TARGET" --head "$UPSTREAM" \
             --title "sync: $UPSTREAM -> $TARGET" \
             --body "$BODY" \
