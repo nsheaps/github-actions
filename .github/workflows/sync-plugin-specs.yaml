@@ -40,4 +40,5 @@ jobs:
         with:
           plugins-dir: ${{ inputs.plugins-dir || 'plugins' }}
           commit: 'true'
-          commit-message: ${{ inputs.commit-message || 'chore(specs): auto-sync plugin SPEC.md files' }}
+          commit-message: |
+            ${{ inputs.commit-message  || 'chore(specs): auto-sync plugin SPEC.md files' }}
