@@ -43,15 +43,46 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Ensure yq is available
+    - name: Ensure mikefarah/yq is available
       shell: bash
       run: |
-        if ! command -v yq >/dev/null 2>&1; then
-          echo "Installing yq..."
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        set -euo pipefail
+        # The action needs mikefarah's Go yq (supports `-o=json` for
+        # YAML→JSON conversion). Some runners pre-install kislyuk's Python
+        # yq — a `jq` wrapper that does NOT understand `-o=json` and exits
+        # with cryptic "Unknown option" errors. Detect, and if the resolved
+        # `yq` is the wrong one, install mikefarah's to /usr/local/bin/yq
+        # and prepend that path for subsequent steps so it shadows the
+        # pre-installed wrapper.
+        install_mikefarah() {
+          echo "Installing mikefarah/yq to /usr/local/bin/yq..."
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+        }
+        yq_is_mikefarah() {
+          # mikefarah's --version line contains the github.com/mikefarah URL.
+          "$1" --version 2>&1 | grep -q 'mikefarah'
+        }
+        if command -v yq >/dev/null 2>&1 && yq_is_mikefarah "$(command -v yq)"; then
+          echo "mikefarah/yq already on PATH: $(command -v yq)"
+        else
+          if command -v yq >/dev/null 2>&1; then
+            echo "Wrong yq detected at $(command -v yq) ($(yq --version 2>&1)); shadowing with mikefarah's."
+          fi
+          install_mikefarah
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
         fi
-        yq --version
+        # Sanity check: must be mikefarah's yq when action.sh runs in the next step.
+        # We can't rely on $GITHUB_PATH having taken effect in THIS step, so
+        # validate by absolute path if we just installed, else use what's on PATH.
+        check_bin=$(command -v yq)
+        if [[ -x /usr/local/bin/yq ]] && yq_is_mikefarah /usr/local/bin/yq; then
+          check_bin=/usr/local/bin/yq
+        fi
+        echo "Verifying $check_bin..."
+        "$check_bin" --version
+        yq_is_mikefarah "$check_bin" || { echo "::error::yq sanity check failed: not mikefarah"; exit 1; }
 
     - name: Apply settings
       id: apply
