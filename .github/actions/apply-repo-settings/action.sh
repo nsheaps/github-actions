@@ -19,6 +19,13 @@ set -euo pipefail
 : "${SECTIONS:=repository,rulesets}"
 : "${APP_ID:=}"
 
+# Derive APP_ID from the installation token when not explicitly provided.
+# An installation token can query GET /app to retrieve the App's metadata.
+if [[ -z "$APP_ID" ]]; then
+  APP_ID=$(GH_TOKEN="$GH_TOKEN" gh api /app --jq '.id' 2>/dev/null || true)
+  [[ -n "$APP_ID" ]] && echo "  → Derived APP_ID=$APP_ID from installation token"
+fi
+
 if [[ ! -f "$SETTINGS_FILE" ]]; then
   echo "::error file=$SETTINGS_FILE::settings file not found"
   exit 1

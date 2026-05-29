@@ -12,8 +12,9 @@ inputs:
     default: ''
 
   app-id:
-    description: 'GitHub App ID. Required. Used to substitute the actor_id: -1 placeholder in Integration bypass actors. Also used for authentication when token is not provided. See docs/setup.html in this action directory for an HTML helper that builds the app via the GitHub manifest flow.'
-    required: true
+    description: 'GitHub App ID. Used to substitute the actor_id: -1 placeholder in Integration bypass actors. Also used for authentication when token is not provided. When token is provided and app-id is omitted, the app ID is derived from the installation token at runtime via GET /app.'
+    required: false
+    default: ''
 
   private-key:
     description: 'GitHub App private key (PEM). Required when token is not provided.'
