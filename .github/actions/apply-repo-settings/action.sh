@@ -17,9 +17,6 @@ set -euo pipefail
 : "${SETTINGS_FILE:=.github/settings.yml}"
 : "${DRY_RUN:=false}"
 : "${SECTIONS:=repository,rulesets}"
-: "${APP_ID:=}"
-# APP_ID is only needed if the settings file still contains actor_id: -1 placeholders.
-# Normally the .github sync workflow resolves placeholders before distributing settings.yml.
 
 if [[ ! -f "$SETTINGS_FILE" ]]; then
   echo "::error file=$SETTINGS_FILE::settings file not found"
@@ -131,19 +128,6 @@ apply_rulesets() {
     local name body existing_id
     name="$(yq -r ".rulesets[$i].name" "$SETTINGS_FILE")"
     body="$(yq -o=json ".rulesets[$i]" "$SETTINGS_FILE")"
-
-    # Substitute actor_id -1 placeholder for Integration bypass actors with the real App ID.
-    # actor_id must be the GitHub App ID (integer), not the installation ID.
-    # Gracefully skip Integration bypass actors if APP_ID is not configured.
-    if [[ -n "$APP_ID" ]]; then
-      body="$(echo "$body" | jq \
-        --argjson app_id "$APP_ID" \
-        '.bypass_actors //= [] | .bypass_actors |= map(if .actor_type == "Integration" and .actor_id == -1 then .actor_id = $app_id else . end)')"
-    else
-      body="$(echo "$body" | jq \
-        'if .bypass_actors then .bypass_actors |= map(select(not (.actor_type == "Integration" and .actor_id == -1))) else . end')"
-      info "APP_ID not set — skipping placeholder Integration bypass actors for: $name"
-    fi
 
     existing_id="$(echo "$existing" | jq -r --arg n "$name" '.[] | select(.name == $n) | .id // empty')"
 

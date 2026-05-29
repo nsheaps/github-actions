@@ -10,15 +10,16 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 
 ## Inputs
 
-| Input           | Required | Default                | Description                                                        |
-| --------------- | -------- | ---------------------- | ------------------------------------------------------------------ |
-| `app-id`        | yes      | —                      | GitHub App ID. Needs `Administration: write` and `Contents: read`. |
-| `private-key`   | yes      | —                      | The App's PEM private key.                                         |
-| `owner`         | no       | current owner          | Target repo owner.                                                 |
-| `repo`          | no       | current repo           | Target repo name.                                                  |
-| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                         |
-| `dry-run`       | no       | `false`                | Print what would change without applying.                          |
-| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                            |
+| Input           | Required | Default                | Description                                                                                                                |
+| --------------- | -------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `token`         | yes      | —                      | GitHub token with `Administration: write` on the target repo (typically from `checkout-as-app` or `github-app-auth`).      |
+| `owner`         | no       | current owner          | Target repo owner.                                                                                                         |
+| `repo`          | no       | current repo           | Target repo name.                                                                                                          |
+| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                                                                                 |
+| `dry-run`       | no       | `false`                | Print what would change without applying.                                                                                  |
+| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                                                                                    |
+
+The action does **not** do any templating or placeholder substitution on `settings-file` — it applies the YAML as-is. If you need env-var-based substitution (e.g. resolving a GitHub App ID into `bypass_actors[].actor_id`), render the file upstream (e.g. with `envsubst`) before invoking this action.
 
 ## Outputs
 
@@ -37,7 +38,7 @@ Source: [`pages/index.html`](../../../pages/index.html). Deployed by [`.github/w
 After creating the app:
 
 1. Install it on every repo you want to manage.
-2. Add `APPLY_REPO_SETTINGS_APP_ID` and `APPLY_REPO_SETTINGS_PRIVATE_KEY` as secrets.
+2. Add `APPLY_REPO_SETTINGS_APP_ID` and `APPLY_REPO_SETTINGS_PRIVATE_KEY` as secrets (consumed by `checkout-as-app` / `github-app-auth` — this action only takes the resulting token).
 
 ## Example workflow
 
@@ -65,11 +66,15 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: nsheaps/github-actions/.github/actions/apply-repo-settings@main
+      - name: Checkout as GitHub App
+        id: checkout
+        uses: nsheaps/github-actions/.github/actions/checkout-as-app@main
         with:
           app-id: ${{ secrets.APPLY_REPO_SETTINGS_APP_ID }}
           private-key: ${{ secrets.APPLY_REPO_SETTINGS_PRIVATE_KEY }}
+      - uses: nsheaps/github-actions/.github/actions/apply-repo-settings@main
+        with:
+          token: ${{ steps.checkout.outputs.token }}
           dry-run: ${{ inputs.dry-run || false }}
 ```
 
