@@ -71,6 +71,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        APP_ID: ${{ inputs.app-id }}
         OWNER: ${{ inputs.owner }}
         REPO: ${{ inputs.repo }}
         SETTINGS_FILE: ${{ inputs.settings-file }}

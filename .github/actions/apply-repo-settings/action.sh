@@ -17,6 +17,7 @@ set -euo pipefail
 : "${SETTINGS_FILE:=.github/settings.yml}"
 : "${DRY_RUN:=false}"
 : "${SECTIONS:=repository,rulesets}"
+: "${APP_ID:=}"
 
 if [[ ! -f "$SETTINGS_FILE" ]]; then
   echo "::error file=$SETTINGS_FILE::settings file not found"
@@ -29,12 +30,48 @@ info() { echo "  → $*"; }
 
 api() {
   # api METHOD PATH [JSON-BODY]
+  # Uses curl to capture the full response body even on errors (gh api only
+  # emits a short error message on failure, hiding the JSON validation details).
   local method="$1" path="$2" body="${3:-}"
+  local resp_file http_code rc=0
+  resp_file=$(mktemp)
+
   if [[ -n "$body" ]]; then
-    gh api -X "$method" "$path" --input - <<<"$body"
+    http_code=$(curl -s -w "%{http_code}" \
+      -X "$method" \
+      -H "Authorization: Bearer $GH_TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      -H "Content-Type: application/json" \
+      -d "$body" \
+      "https://api.github.com${path}" \
+      -o "$resp_file") || rc=$?
   else
-    gh api -X "$method" "$path"
+    http_code=$(curl -s -w "%{http_code}" \
+      -X "$method" \
+      -H "Authorization: Bearer $GH_TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "https://api.github.com${path}" \
+      -o "$resp_file") || rc=$?
   fi
+
+  if [[ $rc -ne 0 ]]; then
+    echo "::error::API $method $path: curl failed (exit $rc)" >&2
+    rm -f "$resp_file"
+    return $rc
+  fi
+
+  local resp_body
+  resp_body=$(cat "$resp_file")
+  rm -f "$resp_file"
+
+  if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+    echo "::error::API $method $path failed (HTTP $http_code): $resp_body" >&2
+    return 1
+  fi
+
+  echo "$resp_body"
 }
 
 want_section() {
@@ -92,6 +129,20 @@ apply_rulesets() {
     local name body existing_id
     name="$(yq -r ".rulesets[$i].name" "$SETTINGS_FILE")"
     body="$(yq -o=json ".rulesets[$i]" "$SETTINGS_FILE")"
+
+    # Substitute actor_id -1 placeholder for Integration bypass actors with the real App ID.
+    # actor_id must be the GitHub App ID (integer), not the installation ID.
+    # Gracefully skip Integration bypass actors if APP_ID is not configured.
+    if [[ -n "$APP_ID" ]]; then
+      body="$(echo "$body" | jq \
+        --argjson app_id "$APP_ID" \
+        '.bypass_actors //= [] | .bypass_actors |= map(if .actor_type == "Integration" and .actor_id == -1 then .actor_id = $app_id else . end)')"
+    else
+      body="$(echo "$body" | jq \
+        'if .bypass_actors then .bypass_actors |= map(select(not (.actor_type == "Integration" and .actor_id == -1))) else . end')"
+      info "APP_ID not set — skipping placeholder Integration bypass actors for: $name"
+    fi
+
     existing_id="$(echo "$existing" | jq -r --arg n "$name" '.[] | select(.name == $n) | .id // empty')"
 
     if [[ -z "$existing_id" ]]; then
