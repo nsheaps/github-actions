@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   plan:
@@ -127,9 +128,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # The aormsby action fast-forwards upstream -> target. It fails when the
+      # branches have diverged or when branch protection rejects the push.
+      # continue-on-error lets us fall back to opening a PR in that case instead
+      # of failing the whole job.
       - name: Sync upstream changes
         if: steps.check.outputs.exists == 'true'
         id: sync
+        continue-on-error: true
         uses: aormsby/Fork-Sync-With-Upstream-action@83d78e8c4bf524e79b091cf257deba4dee9e60df # v3.4.3
         with:
           target_sync_branch: ${{ matrix.target }}
@@ -138,10 +144,37 @@ jobs:
           upstream_sync_repo: ${{ github.repository }}
           test_mode: ${{ inputs.test_mode }}
 
+      # When the direct push could not happen (diverged history or branch
+      # protection), open a PR upstream -> target instead. Idempotent: skips if
+      # a PR is already open for the same head/base, and tolerates "no diff".
+      - name: Open PR if direct sync could not push
+        if: steps.check.outputs.exists == 'true' && steps.sync.outcome == 'failure'
+        env:
+          UPSTREAM: ${{ matrix.upstream }}
+          TARGET: ${{ matrix.target }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          existing=$(gh pr list --repo "$REPO" --base "$TARGET" --head "$UPSTREAM" \
+            --state open --json number -q '.[0].number' || true)
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open for $UPSTREAM -> $TARGET; nothing to do."
+            exit 0
+          fi
+          BODY="Automated sync could not fast-forward \`$TARGET\` from \`$UPSTREAM\` (diverged history or branch protection). Merging via PR instead.\
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh pr create --repo "$REPO" --base "$TARGET" --head "$UPSTREAM" \
+            --title "sync: $UPSTREAM -> $TARGET" \
+            --body "$BODY" \
+            || echo "No PR created (possibly no diff between $UPSTREAM and $TARGET)."
+
       - name: Report
         if: steps.check.outputs.exists == 'true'
         run: |
-          if [ "${{ steps.sync.outputs.has_new_commits }}" = "true" ]; then
+          if [ "${{ steps.sync.outcome }}" = "failure" ]; then
+            echo "Direct sync could not push ${{ matrix.upstream }} -> ${{ matrix.target }}; opened/ensured a PR instead."
+          elif [ "${{ steps.sync.outputs.has_new_commits }}" = "true" ]; then
             echo "Synced new commits from ${{ matrix.upstream }} into ${{ matrix.target }}."
           else
             echo "${{ matrix.target }} already up-to-date with ${{ matrix.upstream }}."
