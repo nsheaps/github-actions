@@ -10,14 +10,14 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 
 ## Inputs
 
-| Input           | Required | Default                | Description                                                                                                                |
-| --------------- | -------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `token`         | yes      | —                      | GitHub token with `Administration: write` on the target repo (typically from `checkout-as-app` or `github-app-auth`).      |
-| `owner`         | no       | current owner          | Target repo owner.                                                                                                         |
-| `repo`          | no       | current repo           | Target repo name.                                                                                                          |
-| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                                                                                 |
-| `dry-run`       | no       | `false`                | Print what would change without applying.                                                                                  |
-| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                                                                                    |
+| Input           | Required | Default                | Description                                                                                                           |
+| --------------- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `token`         | yes      | —                      | GitHub token with `Administration: write` on the target repo (typically from `checkout-as-app` or `github-app-auth`). |
+| `owner`         | no       | current owner          | Target repo owner.                                                                                                    |
+| `repo`          | no       | current repo           | Target repo name.                                                                                                     |
+| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                                                                            |
+| `dry-run`       | no       | `false`                | Print what would change without applying.                                                                             |
+| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                                                                               |
 
 The action does **not** do any templating or placeholder substitution on `settings-file` — it applies the YAML as-is. If you need env-var-based substitution (e.g. resolving a GitHub App ID into `bypass_actors[].actor_id`), render the file upstream (e.g. with `envsubst`) before invoking this action.
 
