@@ -7,18 +7,8 @@ branding:
 
 inputs:
   token:
-    description: 'Pre-generated GitHub App installation token. When provided, app-id/private-key are not used for authentication. app-id is still required for substituting the actor_id: -1 placeholder in Integration bypass actors.'
-    required: false
-    default: ''
-
-  app-id:
-    description: 'GitHub App ID. Required. Used to substitute the actor_id: -1 placeholder in Integration bypass actors. Also used for authentication when token is not provided. See docs/setup.html in this action directory for an HTML helper that builds the app via the GitHub manifest flow.'
+    description: 'GitHub token with administration:write on the target repo (typically a GitHub App installation token from checkout-as-app or github-app-auth).'
     required: true
-
-  private-key:
-    description: 'GitHub App private key (PEM). Required when token is not provided.'
-    required: false
-    default: ''
 
   owner:
     description: 'Target repo owner. Defaults to the current repo owner.'
@@ -53,32 +43,52 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Authenticate as GitHub App
-      id: app-token
-      if: ${{ inputs.token == '' }}
-      uses: nsheaps/github-actions/.github/actions/github-app-auth@603052841cd49b9fdc99bc32979ff9c45c9b669e # 2026-05-22
-      with:
-        app-id: ${{ inputs.app-id }}
-        private-key: ${{ inputs.private-key }}
-        owner: ${{ inputs.owner }}
-        skip-checkout: 'true'
-
-    - name: Ensure yq is available
+    - name: Ensure mikefarah/yq is available
       shell: bash
       run: |
-        if ! command -v yq >/dev/null 2>&1; then
-          echo "Installing yq..."
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        set -euo pipefail
+        # The action needs mikefarah's Go yq (supports `-o=json` for
+        # YAML→JSON conversion). Some runners pre-install kislyuk's Python
+        # yq — a `jq` wrapper that does NOT understand `-o=json` and exits
+        # with cryptic "Unknown option" errors. Detect, and if the resolved
+        # `yq` is the wrong one, install mikefarah's to /usr/local/bin/yq
+        # and prepend that path for subsequent steps so it shadows the
+        # pre-installed wrapper.
+        install_mikefarah() {
+          echo "Installing mikefarah/yq to /usr/local/bin/yq..."
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+        }
+        yq_is_mikefarah() {
+          # mikefarah's --version line contains the github.com/mikefarah URL.
+          "$1" --version 2>&1 | grep -q 'mikefarah'
+        }
+        if command -v yq >/dev/null 2>&1 && yq_is_mikefarah "$(command -v yq)"; then
+          echo "mikefarah/yq already on PATH: $(command -v yq)"
+        else
+          if command -v yq >/dev/null 2>&1; then
+            echo "Wrong yq detected at $(command -v yq) ($(yq --version 2>&1)); shadowing with mikefarah's."
+          fi
+          install_mikefarah
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
         fi
-        yq --version
+        # Sanity check: must be mikefarah's yq when action.sh runs in the next step.
+        # We can't rely on $GITHUB_PATH having taken effect in THIS step, so
+        # validate by absolute path if we just installed, else use what's on PATH.
+        check_bin=$(command -v yq)
+        if [[ -x /usr/local/bin/yq ]] && yq_is_mikefarah /usr/local/bin/yq; then
+          check_bin=/usr/local/bin/yq
+        fi
+        echo "Verifying $check_bin..."
+        "$check_bin" --version
+        yq_is_mikefarah "$check_bin" || { echo "::error::yq sanity check failed: not mikefarah"; exit 1; }
 
     - name: Apply settings
       id: apply
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.token || steps.app-token.outputs.token }}
-        APP_ID: ${{ inputs.app-id }}
+        GH_TOKEN: ${{ inputs.token }}
         OWNER: ${{ inputs.owner }}
         REPO: ${{ inputs.repo }}
         SETTINGS_FILE: ${{ inputs.settings-file }}
