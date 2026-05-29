@@ -12,23 +12,23 @@ This is the nsheaps-org composite action for the "create PR if not already open"
 
 ## Inputs
 
-| Input       | Required | Default                 | Description                                                                            |
-| ----------- | -------- | ----------------------- | -------------------------------------------------------------------------------------- |
-| `title`     | yes      | —                       | PR title                                                                               |
-| `body`      | yes      | —                       | PR body. A `Workflow run: <url>` line is appended automatically.                       |
-| `base`      | yes      | —                       | Base branch (the branch to merge INTO)                                                 |
-| `head`      | yes      | —                       | Head branch (the branch to merge FROM)                                                 |
-| `repo`      | no       | `${{ github.repository }}` | Target repo in `OWNER/REPO` form                                                    |
-| `token`     | yes      | —                       | GitHub token with `pull-requests: write` + `contents: read` on the target repo         |
-| `labels`    | no       | `''`                    | Comma-separated labels to apply to the PR                                              |
-| `reviewers` | no       | `''`                    | Comma-separated GitHub usernames to request review from                                |
+| Input       | Required | Default                    | Description                                                                    |
+| ----------- | -------- | -------------------------- | ------------------------------------------------------------------------------ |
+| `title`     | yes      | —                          | PR title                                                                       |
+| `body`      | yes      | —                          | PR body. A `Workflow run: <url>` line is appended automatically.               |
+| `base`      | yes      | —                          | Base branch (the branch to merge INTO)                                         |
+| `head`      | yes      | —                          | Head branch (the branch to merge FROM)                                         |
+| `repo`      | no       | `${{ github.repository }}` | Target repo in `OWNER/REPO` form                                               |
+| `token`     | yes      | —                          | GitHub token with `pull-requests: write` + `contents: read` on the target repo |
+| `labels`    | no       | `''`                       | Comma-separated labels to apply to the PR                                      |
+| `reviewers` | no       | `''`                       | Comma-separated GitHub usernames to request review from                        |
 
 ## Outputs
 
-| Output      | Description                                                                                                |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `pr-number` | Number of the PR (existing or newly opened). Empty when `result=nodiff`.                                   |
-| `pr-url`    | URL of the PR (existing or newly opened). Empty when `result=nodiff`.                                      |
+| Output      | Description                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `pr-number` | Number of the PR (existing or newly opened). Empty when `result=nodiff`.                                       |
+| `pr-url`    | URL of the PR (existing or newly opened). Empty when `result=nodiff`.                                          |
 | `result`    | `existing` (PR was already open), `opened` (new PR was created), or `nodiff` (no PR because there is no diff). |
 
 ## Example
@@ -38,7 +38,7 @@ This is the nsheaps-org composite action for the "create PR if not already open"
   if: steps.sync.outcome == 'failure'
   uses: nsheaps/github-actions/.github/actions/open-pr-if-needed@main
   with:
-    title: "sync: ${{ matrix.upstream }} -> ${{ matrix.target }}"
+    title: 'sync: ${{ matrix.upstream }} -> ${{ matrix.target }}'
     body: |
       Automated sync could not fast-forward `${{ matrix.target }}` from `${{ matrix.upstream }}`
       (diverged history or branch protection). Merging via PR instead.
