@@ -1,0 +1,152 @@
+name: 'Open PR If Needed'
+description: |
+  Idempotently open a pull request between two branches that already exist on
+  the remote. Skips if an open PR already exists for the same head -> base,
+  and tolerates the "no diff" case without failing. Always appends a link
+  back to the triggering workflow run in the PR body so reviewers can trace
+  the PR back to its source.
+
+  Use when:
+    - Both head and base branches already exist on the remote (e.g. a sync
+      job that pushes to head and wants to fall back to a PR when direct
+      push to base is blocked).
+    - You want a single-source-of-truth for "create PR if not already open"
+      across nsheaps workflows so the idempotency + workflow-run-link
+      conventions are applied consistently.
+
+  Pattern extracted from nsheaps/.github/.github/workflows/sync-repo-settings.yaml
+  (the "Try direct push, fall back to PR" idiom) per Nate review on
+  https://github.com/nsheaps/github-actions/pull/48.
+
+branding:
+  icon: 'git-pull-request'
+  color: 'blue'
+
+inputs:
+  title:
+    description: 'PR title'
+    required: true
+
+  body:
+    description: |
+      PR body. A "Workflow run: <url>" line is appended automatically using
+      the conventional nsheaps format.
+    required: true
+
+  base:
+    description: 'Base branch (the branch to merge INTO)'
+    required: true
+
+  head:
+    description: 'Head branch (the branch to merge FROM)'
+    required: true
+
+  repo:
+    description: 'Target repository in OWNER/REPO form'
+    required: false
+    default: ${{ github.repository }}
+
+  token:
+    description: |
+      GitHub token used for gh CLI calls. Needs `pull-requests: write` and
+      `contents: read` on the target repo.
+    required: true
+
+  labels:
+    description: 'Comma-separated labels to apply to the PR (optional)'
+    required: false
+    default: ''
+
+  reviewers:
+    description: 'Comma-separated GitHub usernames to request review from (optional)'
+    required: false
+    default: ''
+
+outputs:
+  pr-number:
+    description: 'Number of the PR that was opened or already existed. Empty if no PR was created (no diff between head and base).'
+    value: ${{ steps.open.outputs.pr-number }}
+
+  pr-url:
+    description: 'URL of the PR that was opened or already existed. Empty if no PR was created.'
+    value: ${{ steps.open.outputs.pr-url }}
+
+  result:
+    description: |
+      One of: `existing` (a PR was already open for head->base),
+      `opened` (a new PR was created),
+      `nodiff` (no PR created because head == base or no diff).
+    value: ${{ steps.open.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Open PR if not already open
+      id: open
+      shell: bash
+      env:
+        TITLE: ${{ inputs.title }}
+        BODY: ${{ inputs.body }}
+        BASE: ${{ inputs.base }}
+        HEAD: ${{ inputs.head }}
+        REPO: ${{ inputs.repo }}
+        LABELS: ${{ inputs.labels }}
+        REVIEWERS: ${{ inputs.reviewers }}
+        GH_TOKEN: ${{ inputs.token }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        # 1. Idempotency check: does an open PR already exist for head -> base?
+        existing=$(gh pr list --repo "$REPO" --base "$BASE" --head "$HEAD" \
+          --state open --json number,url -q '.[0]' || echo '')
+        if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+          number=$(echo "$existing" | jq -r '.number')
+          url=$(echo "$existing" | jq -r '.url')
+          echo "PR #${number} already open for ${HEAD} -> ${BASE}; nothing to do."
+          echo "pr-number=${number}" >> "$GITHUB_OUTPUT"
+          echo "pr-url=${url}"      >> "$GITHUB_OUTPUT"
+          echo "result=existing"    >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # 2. Compose body with workflow run self-link appended.
+        FULL_BODY="${BODY}
+
+        Workflow run: ${RUN_URL}"
+
+        # 3. Create the PR. `gh pr create` exits non-zero when there is no
+        # diff between head and base — treat that as a no-op (result=nodiff).
+        create_args=( --repo "$REPO" --base "$BASE" --head "$HEAD"
+                      --title "$TITLE" --body "$FULL_BODY" )
+        if [ -n "$LABELS" ]; then
+          # gh accepts repeated --label flags; split on comma.
+          IFS=',' read -ra LBL <<< "$LABELS"
+          for l in "${LBL[@]}"; do
+            l_trimmed=$(echo "$l" | xargs)
+            [ -n "$l_trimmed" ] && create_args+=( --label "$l_trimmed" )
+          done
+        fi
+        if [ -n "$REVIEWERS" ]; then
+          create_args+=( --reviewer "$REVIEWERS" )
+        fi
+
+        if pr_url=$(gh pr create "${create_args[@]}" 2>create.log); then
+          number=$(basename "$pr_url")
+          echo "Opened PR #${number}: ${pr_url}"
+          echo "pr-number=${number}" >> "$GITHUB_OUTPUT"
+          echo "pr-url=${pr_url}"    >> "$GITHUB_OUTPUT"
+          echo "result=opened"       >> "$GITHUB_OUTPUT"
+        else
+          # If gh failed because of "no commits between" / no diff, treat as no-op.
+          if grep -qiE 'no commits between|no diff|nothing to compare' create.log; then
+            echo "No PR created (no diff between ${HEAD} and ${BASE})."
+            echo "pr-number="   >> "$GITHUB_OUTPUT"
+            echo "pr-url="      >> "$GITHUB_OUTPUT"
+            echo "result=nodiff" >> "$GITHUB_OUTPUT"
+          else
+            echo "gh pr create failed:" >&2
+            cat create.log >&2
+            exit 1
+          fi
+        fi
