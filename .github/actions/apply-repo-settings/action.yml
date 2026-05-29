@@ -6,13 +6,19 @@ branding:
   color: 'blue'
 
 inputs:
+  token:
+    description: 'Pre-generated GitHub App installation token. When provided, app-id/private-key are not used for authentication. app-id is still required for substituting the actor_id: -1 placeholder in Integration bypass actors.'
+    required: false
+    default: ''
+
   app-id:
-    description: 'GitHub App ID for the applier. Must have Administration:write on the target repo. See docs/setup.html in this action directory for an HTML helper that builds the app via the GitHub manifest flow.'
+    description: 'GitHub App ID. Required. Used to substitute the actor_id: -1 placeholder in Integration bypass actors. Also used for authentication when token is not provided. See docs/setup.html in this action directory for an HTML helper that builds the app via the GitHub manifest flow.'
     required: true
 
   private-key:
-    description: 'GitHub App private key (PEM).'
-    required: true
+    description: 'GitHub App private key (PEM). Required when token is not provided.'
+    required: false
+    default: ''
 
   owner:
     description: 'Target repo owner. Defaults to the current repo owner.'
@@ -47,14 +53,15 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Generate App installation token
+    - name: Authenticate as GitHub App
       id: app-token
-      uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+      if: ${{ inputs.token == '' }}
+      uses: nsheaps/github-actions/.github/actions/github-app-auth@603052841cd49b9fdc99bc32979ff9c45c9b669e # 2026-05-22
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
         owner: ${{ inputs.owner }}
-        repositories: ${{ inputs.repo }}
+        skip-checkout: 'true'
 
     - name: Ensure yq is available
       shell: bash
@@ -70,7 +77,7 @@ runs:
       id: apply
       shell: bash
       env:
-        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        GH_TOKEN: ${{ inputs.token || steps.app-token.outputs.token }}
         APP_ID: ${{ inputs.app-id }}
         OWNER: ${{ inputs.owner }}
         REPO: ${{ inputs.repo }}
