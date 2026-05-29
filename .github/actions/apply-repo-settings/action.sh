@@ -66,7 +66,27 @@ api() {
   rm -f "$resp_file"
 
   if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
-    echo "::error::API $method $path failed (HTTP $http_code): $resp_body" >&2
+    # Single-line annotation: GitHub truncates at the first newline, which on a
+    # JSON body lands at the first `{` — losing every useful field. Compact via
+    # jq when possible so the annotation carries the full message.
+    local compact_body="$resp_body"
+    if command -v jq >/dev/null 2>&1; then
+      compact_body=$(echo "$resp_body" | jq -c . 2>/dev/null) || compact_body="$resp_body"
+    fi
+    echo "::error::API $method $path failed (HTTP $http_code): $compact_body" >&2
+    # Also surface the *pretty* body in the step summary (readable in the
+    # job page AND via /actions/jobs/{id} → output.summary in the API).
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      {
+        echo "### API failure: $method $path"
+        echo
+        echo "**HTTP $http_code**"
+        echo
+        echo '```json'
+        echo "$resp_body"
+        echo '```'
+      } >> "$GITHUB_STEP_SUMMARY"
+    fi
     return 1
   fi
 
