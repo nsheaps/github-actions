@@ -4,6 +4,8 @@ An ephemeral, in-workflow alternative to the [repository-settings GitHub App](ht
 
 Reads `.github/settings.yml` from the current repo and applies the supported sections to the target repo via the GitHub API, using a GitHub App token (so the action runs only when invoked — no always-on bot, no third-party service).
 
+It also runs in reverse: with `mode: export` it reads the repo's **live** config/rulesets and writes them back into `settings.yml`, so manual changes made in the GitHub UI can be captured back into source control (see [Reverse sync](#reverse-sync-mode-export) below).
+
 ## Why not self-host the upstream app?
 
 The upstream app is a Probot webhook server — it's designed to listen for `push` events on a long-running process. Adapting it for ephemeral one-shot runs is more invasive than building a minimal applier from scratch. This action covers the two sections we actually use (`repository:` config and `rulesets:`) in ~170 lines of bash + `gh api`. Other sections (`labels`, `collaborators`, `teams`, `environments`, legacy `branches`) are not yet implemented — labels are managed via a separate sync today.
@@ -15,15 +17,57 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 | `token`         | yes      | —                      | GitHub token with `Administration: write` on the target repo (typically from `checkout-as-app` or `github-app-auth`). |
 | `owner`         | no       | current owner          | Target repo owner.                                                                                                    |
 | `repo`          | no       | current repo           | Target repo name.                                                                                                     |
-| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                                                                            |
-| `dry-run`       | no       | `false`                | Print what would change without applying.                                                                             |
-| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                                                                               |
+| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply (or write, in export mode).                                                                 |
+| `dry-run`       | no       | `false`                | Print what would change without applying / writing.                                                                  |
+| `mode`          | no       | `apply`                | `apply` (file → repo) or `export` (repo → file, reverse sync).                                                        |
+| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to sync.                                                                                |
 
 The action does **not** do any templating or placeholder substitution on `settings-file` — it applies the YAML as-is. If you need env-var-based substitution (e.g. resolving a GitHub App ID into `bypass_actors[].actor_id`), render the file upstream (e.g. with `envsubst`) before invoking this action.
 
 ## Outputs
 
-- `summary` — JSON object: `{ repository, rulesets_created, rulesets_updated, rulesets_unchanged }`.
+- `summary` — JSON object. In `apply` mode: `{ repository, rulesets_created, rulesets_updated, rulesets_unchanged }`. In `export` mode: `{ mode, changed, sections }`.
+- `changed` — export mode only: `"true"` if `settings-file` was modified, else `"false"`. Empty in apply mode.
+
+## Reverse sync (`mode: export`)
+
+`mode: export` flips the direction: instead of pushing the YAML to the repo, it reads the repo's live state from the API and writes it **back** into `settings-file`, then reports whether the file changed via the `changed` output. This lets a workflow capture changes made directly in the GitHub UI back into source control instead of letting them drift.
+
+- **`rulesets`** → lists `/repos/{owner}/{repo}/rulesets`, fetches each, normalizes to the file's shape (`name`, `target`, `enforcement`, `conditions`, `bypass_actors`, `rules`), and replaces the `.rulesets` array wholesale.
+- **`repository`** → reads `/repos/{owner}/{repo}` and updates **only the keys already present** in the file's `.repository` block (so drift on managed keys is captured without introducing keys the repo deliberately omits).
+
+The rest of the file (other top-level keys, the repository keys you don't manage) is preserved. The touched section is normalized, so inline comments inside `.rulesets` are dropped — fine for an auto-capture that lands as a reviewable PR diff. Classic branch protection (the legacy `branches:` protection API) is **not** exported — this org models protection as rulesets.
+
+### Auto-capturing UI changes
+
+Pair export with the `branch_protection_rule` workflow trigger so any protection change re-exports the rulesets and opens a PR:
+
+```yaml
+on:
+  branch_protection_rule:
+    types: [created, edited, deleted]
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: nsheaps/github-actions/.github/actions/checkout-as-app@main
+        id: checkout
+        with:
+          app-id: ${{ secrets.AUTOMATION_GITHUB_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_GITHUB_APP_PRIVATE_KEY }}
+      - uses: nsheaps/github-actions/.github/actions/apply-repo-settings@main
+        id: export
+        with:
+          token: ${{ steps.checkout.outputs.token }}
+          mode: export
+          sections: rulesets
+      # then: if steps.export.outputs.changed == 'true', commit + open-pr-if-needed
+```
+
+> There is no `repository_ruleset` Actions trigger, so `branch_protection_rule` (classic protection) is the available hook; the export re-reads rulesets on any such event. For ruleset-edit-driven exports, dispatch this action from an org-level ruleset webhook via `repository_dispatch`.
+
+The full wired-up workflow (commit + PR) lives at [`nsheaps/.github`'s `apply-repo-settings.yaml` template](https://github.com/nsheaps/.github/blob/main/ansible/templates/.github/workflows/apply-repo-settings.yaml).
 
 ## Setting up the GitHub App
 
