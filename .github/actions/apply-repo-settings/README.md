@@ -36,16 +36,18 @@ The action does **not** do any templating or placeholder substitution on `settin
 - **`rulesets`** → lists `/repos/{owner}/{repo}/rulesets`, fetches each, normalizes to the file's shape (`name`, `target`, `enforcement`, `conditions`, `bypass_actors`, `rules`), and replaces the `.rulesets` array wholesale.
 - **`repository`** → reads `/repos/{owner}/{repo}` and updates **only the keys already present** in the file's `.repository` block (so drift on managed keys is captured without introducing keys the repo deliberately omits).
 
-The rest of the file (other top-level keys, the repository keys you don't manage) is preserved. The touched section is normalized, so inline comments inside `.rulesets` are dropped — fine for an auto-capture that lands as a reviewable PR diff. Classic branch protection (the legacy `branches:` protection API) is **not** exported — this org models protection as rulesets.
+The rest of the file (other top-level keys, the repository keys you don't manage) is preserved. The touched section is normalized, so inline comments inside `.rulesets` are dropped — fine for an auto-capture that lands as a reviewable commit/diff. Classic branch protection (the legacy `branches:` protection API) is **not** exported — this org models protection as rulesets.
 
-### Auto-capturing UI changes
+### Auto-capturing live drift
 
-Pair export with the `branch_protection_rule` workflow trigger so any protection change re-exports the rulesets and opens a PR:
+Run export from a workflow, then commit whatever it captured. The canonical wiring triggers export on a push that changes the workflow file (so the captured `settings.yml` lands in the same branch/PR as a preview) and on a weekly schedule (to catch UI ruleset edits that fire no push):
 
 ```yaml
 on:
-  branch_protection_rule:
-    types: [created, edited, deleted]
+  push:
+    paths: ['.github/workflows/apply-repo-settings.yaml']
+  schedule:
+    - cron: '0 0 * * 0'
 
 jobs:
   export:
@@ -62,12 +64,16 @@ jobs:
           token: ${{ steps.checkout.outputs.token }}
           mode: export
           sections: rulesets
-      # then: if steps.export.outputs.changed == 'true', commit + open-pr-if-needed
+      - if: steps.export.outputs.changed == 'true'
+        run: |
+          git add .github/settings.yml
+          git commit -m "chore: sync rulesets into settings.yml"
+          git push origin "HEAD:${{ github.ref_name }}"
 ```
 
-> There is no `repository_ruleset` Actions trigger, so `branch_protection_rule` (classic protection) is the available hook; the export re-reads rulesets on any such event. For ruleset-edit-driven exports, dispatch this action from an org-level ruleset webhook via `repository_dispatch`.
+> There is no `repository_ruleset` Actions trigger, so pure UI ruleset edits (with no corresponding push) are caught by the weekly schedule. For immediate ruleset-edit-driven exports, dispatch this action from an org-level ruleset webhook via `repository_dispatch`.
 
-The full wired-up workflow (commit + PR) lives at [`nsheaps/.github`'s `apply-repo-settings.yaml` template](https://github.com/nsheaps/.github/blob/main/ansible/templates/.github/workflows/apply-repo-settings.yaml).
+The full wired-up workflow (push/schedule gating + commit-back) lives at [`nsheaps/.github`'s `apply-repo-settings.yaml` template](https://github.com/nsheaps/.github/blob/main/ansible/templates/.github/workflows/apply-repo-settings.yaml).
 
 ## Setting up the GitHub App
 

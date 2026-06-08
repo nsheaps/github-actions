@@ -5,8 +5,9 @@
 # Direction is controlled by MODE:
 #   apply  (default) — read SETTINGS_FILE and apply it to the repo.
 #   export           — read the repo's live state and write it back into
-#                      SETTINGS_FILE (reverse sync, for branch_protection_rule
-#                      triggered auto-capture of UI changes).
+#                      SETTINGS_FILE (reverse sync). A calling workflow can
+#                      then commit the result, e.g. to capture live drift back
+#                      into source control.
 #
 # Supported sections:
 #   repository  → apply:  PATCH /repos/{owner}/{repo}

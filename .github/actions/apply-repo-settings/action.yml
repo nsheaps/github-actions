@@ -35,9 +35,9 @@ inputs:
       Direction of the sync:
         apply  — read settings-file and apply it to the repo (default).
         export — read the repo's live config/rulesets from the API and write
-                 them back into settings-file (reverse sync). Pair this with a
-                 `branch_protection_rule`-triggered workflow to capture manual
-                 changes (made in the GitHub UI) back into source control.
+                 them back into settings-file (reverse sync). A calling
+                 workflow can then commit the result to capture changes made
+                 in the GitHub UI back into source control.
     required: false
     default: 'apply'
 
