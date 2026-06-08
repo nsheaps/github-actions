@@ -18,7 +18,7 @@ The upstream app is a Probot webhook server — it's designed to listen for `pus
 | `owner`         | no       | current owner          | Target repo owner.                                                                                                    |
 | `repo`          | no       | current repo           | Target repo name.                                                                                                     |
 | `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply (or write, in export mode).                                                                 |
-| `dry-run`       | no       | `false`                | Print what would change without applying / writing.                                                                  |
+| `dry-run`       | no       | `false`                | Print what would change without applying / writing.                                                                   |
 | `mode`          | no       | `apply`                | `apply` (file → repo) or `export` (repo → file, reverse sync).                                                        |
 | `sections`      | no       | `repository,rulesets`  | Comma-separated section names to sync.                                                                                |
 
