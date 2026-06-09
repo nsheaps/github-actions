@@ -132,4 +132,3 @@ jobs:
 
       - name: Run action unit tests
         run: mise run test
-
