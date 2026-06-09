@@ -117,3 +117,19 @@ jobs:
               id: grype
             - uses: ./.github/actions/lint-gitleaks
               id: gitleaks
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - name: Run action unit tests
+        run: mise run test
+

@@ -1,5 +1,6 @@
 [tools]
 node = "lts"
+python = "3.12"  # for action unit tests (merge_live)
 
 # Format tools
 editorconfig-checker = "latest"
