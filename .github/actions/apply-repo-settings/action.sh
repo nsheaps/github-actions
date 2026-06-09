@@ -4,16 +4,18 @@
 #
 # Direction is controlled by MODE:
 #   apply  (default) — read SETTINGS_FILE and apply it to the repo.
-#   export           — read the repo's live state and write it back into
-#                      SETTINGS_FILE (reverse sync). A calling workflow can
-#                      then commit the result, e.g. to capture live drift back
-#                      into source control.
+#   export           — read the repo's live state and deep-merge it INTO
+#                      SETTINGS_FILE (reverse sync). The merge is additive and
+#                      lossless (see merge_live.py): the file wins on existing
+#                      scalars, live only ADDS missing keys/list-items, comments
+#                      are preserved, and nothing already in the file is removed.
+#                      A calling workflow can then commit the result.
 #
 # Supported sections:
 #   repository    → apply:  PATCH /repos/{owner}/{repo}
-#                   export: GET   /repos/{owner}/{repo}  (managed keys only)
+#                   export: GET   /repos/{owner}/{repo}  (full settings key set)
 #   rulesets      → apply:  POST/PUT  /repos/{owner}/{repo}/rulesets
-#                   export: GET       /repos/{owner}/{repo}/rulesets
+#                   export: GET       /repos/{owner}/{repo}/rulesets (deep-merged)
 #   labels        → apply:  POST/PATCH /repos/{owner}/{repo}/labels
 #                   export: GET        /repos/{owner}/{repo}/labels (ALL labels)
 #   collaborators → apply:  PUT /repos/{owner}/{repo}/collaborators/{user}
@@ -21,12 +23,13 @@
 #   teams         → apply:  PUT /orgs/{org}/teams/{slug}/repos/{owner}/{repo}
 #                   export: GET /repos/{owner}/{repo}/teams
 #
-# PRUNE BEHAVIOR: apply is currently **non-destructive for every section** — it
-# creates/updates what's in SETTINGS_FILE but never deletes rulesets/labels or
-# revokes collaborators/teams that exist on the repo but aren't listed. This
+# PRUNE BEHAVIOR: BOTH directions are **non-destructive**. apply creates/updates
+# what's in SETTINGS_FILE but never deletes rulesets/labels or revokes
+# collaborators/teams absent from it; export only ADDS to SETTINGS_FILE and
+# never removes entries (so pending settings not yet on the repo survive). This
 # matches the github-label-sync (--allow-added-labels) behavior the labels
-# section replaces, and avoids auto-revoking access. TODO(prune): once export
-# is proven to capture full live state reliably, add an opt-in prune mode so
+# section replaces, and avoids auto-revoking access. TODO(prune): once export is
+# proven to capture full live state reliably, add an opt-in prune mode so
 # SETTINGS_FILE can be made authoritative per-section.
 #
 # Not modeled: environments, and classic branch protection (the `branches:`
@@ -317,152 +320,103 @@ apply_teams() {
 }
 
 ###############################################################################
-# export: write the repo's live state back into SETTINGS_FILE.
+# export: merge the repo's LIVE state INTO SETTINGS_FILE (reverse sync).
 #
-# `yq` here is guaranteed to be mikefarah/yq (the wrapping action.yml installs
-# it), so YAML editing + `load()` splicing is available. Splicing whole nodes
-# normalizes the touched section (inline comments in that block are dropped) —
-# acceptable for an auto-capture that lands as a reviewable PR diff.
+# Builds a "source" JSON of the live repo state (in the settings.yml schema) for
+# the requested sections, then deep-merges it into the existing file via
+# merge_live.py (ruamel, comment-preserving). The merge is ADDITIVE and lossless:
+# the file wins on existing scalars, live only ADDS missing keys/list-items, and
+# nothing already in the file is removed (so pending settings not yet applied to
+# the repo survive). The file is rewritten only when content actually changes.
 ###############################################################################
-# repository: pull live config, but only for the keys ALREADY present in the
-# file, so export reflects drift on managed keys without introducing keys the
-# repo deliberately omits.
-export_repository() {
-  log "repository (export)"
-  local keys
-  keys="$(yq -o=json -I=0 '.repository // {} | keys' "$SETTINGS_FILE" 2>/dev/null || echo '[]')"
-  if [[ -z "$keys" || "$keys" == "[]" || "$keys" == "null" ]]; then
-    info "no repository block in file, nothing to export"
-    endlog
-    return
+
+# Full set of repository settings keys we capture (drops nulls). This is the
+# *complete* settable set — export no longer narrows to keys already in the file,
+# so settings.yml can represent the full repo configuration.
+_REPO_KEYS='{has_issues, has_projects, has_wiki, has_downloads, is_template, default_branch, allow_squash_merge, allow_merge_commit, allow_rebase_merge, allow_auto_merge, allow_update_branch, delete_branch_on_merge, squash_merge_commit_title, squash_merge_commit_message, merge_commit_title, merge_commit_message, description, homepage, topics, private, web_commit_signoff_required, archived}'
+
+# Build the live-state source object (only requested sections) on stdout.
+build_export_source() {
+  local obj='{}'
+
+  if want_section "repository"; then
+    local live rep
+    live="$(api GET "/repos/${OWNER}/${REPO}")"
+    rep="$(jq -c "$_REPO_KEYS | with_entries(select(.value != null))" <<<"$live")"
+    obj="$(jq -c --argjson v "$rep" '.repository = $v' <<<"$obj")"
   fi
 
-  local live new
-  live="$(api GET "/repos/${OWNER}/${REPO}")"
-  # Project live config to just the keys the file already manages.
-  new="$(jq -c --argjson keys "$keys" \
-    '. as $r | reduce $keys[] as $k ({}; . + {($k): $r[$k]})' <<<"$live")"
-
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "$new" | jq '.'
-    endlog
-    return
+  if want_section "rulesets"; then
+    local list arr='[]' id full norm
+    list="$(gh api --paginate "/repos/${OWNER}/${REPO}/rulesets" --jq '[.[].id]')"
+    for id in $(echo "$list" | jq -r '.[]'); do
+      full="$(gh api "/repos/${OWNER}/${REPO}/rulesets/${id}")"
+      norm="$(echo "$full" | jq '{
+        name, target, enforcement, conditions,
+        bypass_actors: [ (.bypass_actors // [])[] | {actor_id, actor_type, bypass_mode} ],
+        rules: [ (.rules // [])[] | {type} + (if has("parameters") and .parameters != null then {parameters} else {} end) ]
+      }')"
+      arr="$(jq -c --argjson i "$norm" '. + [$i]' <<<"$arr")"
+    done
+    obj="$(jq -c --argjson v "$arr" '.rulesets = $v' <<<"$obj")"
   fi
 
-  local tmp; tmp="$(mktemp --suffix=.yml)"
-  echo "$new" | yq -P '{"repository": .}' > "$tmp"
-  # Deep-merge over the existing block so only the managed keys are touched.
-  yq -i ".repository = (.repository // {}) * load(\"$tmp\").repository" "$SETTINGS_FILE"
-  rm -f "$tmp"
-  info "wrote repository block"
-  endlog
-}
-
-# rulesets: fetch every live ruleset, normalize to the same shape the file
-# uses, and replace `.rulesets` wholesale.
-export_rulesets() {
-  log "rulesets (export)"
-
-  local list ids
-  list="$(gh api --paginate "/repos/${OWNER}/${REPO}/rulesets" --jq '[.[] | {name, id}]')"
-  info "found $(echo "$list" | jq 'length') live ruleset(s)"
-  ids="$(echo "$list" | jq -r '.[].id')"
-
-  local arr='[]' id full norm
-  for id in $ids; do
-    full="$(gh api "/repos/${OWNER}/${REPO}/rulesets/${id}")"
-    # Match the file schema: name, target, enforcement, conditions,
-    # bypass_actors[{actor_id,actor_type,bypass_mode}], rules[{type,parameters?}].
-    norm="$(echo "$full" | jq '{
-      name,
-      target,
-      enforcement,
-      conditions,
-      bypass_actors: [ (.bypass_actors // [])[] | {actor_id, actor_type, bypass_mode} ],
-      rules: [ (.rules // [])[] | {type} + (if has("parameters") and .parameters != null then {parameters} else {} end) ]
-    }')"
-    arr="$(jq -c --argjson item "$norm" '. + [$item]' <<<"$arr")"
-  done
-
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo "$arr" | jq '.'
-    endlog
-    return
+  if want_section "labels"; then
+    local arr
+    arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/labels" --jq '[.[] | {name, color, description}]')"
+    obj="$(jq -c --argjson v "$arr" '.labels = $v' <<<"$obj")"
   fi
 
-  local tmp; tmp="$(mktemp --suffix=.yml)"
-  echo "$arr" | yq -P '{"rulesets": .}' > "$tmp"
-  yq -i ".rulesets = load(\"$tmp\").rulesets" "$SETTINGS_FILE"
-  rm -f "$tmp"
-  info "wrote $(echo "$arr" | jq 'length') ruleset(s)"
-  endlog
+  if want_section "collaborators"; then
+    local arr
+    arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/collaborators?affiliation=direct" \
+      --jq '[.[] | {username: .login, permission: (.role_name // "push")}]')"
+    arr="$(jq -c 'map(.permission |= ({"read":"pull","write":"push"}[.] // .))' <<<"$arr")"
+    obj="$(jq -c --argjson v "$arr" '.collaborators = $v' <<<"$obj")"
+  fi
+
+  if want_section "teams"; then
+    local arr
+    arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/teams" \
+      --jq '[.[] | {name: .slug, permission: (.permission // "push")}]')"
+    arr="$(jq -c 'map(.permission |= ({"read":"pull","write":"push"}[.] // .))' <<<"$arr")"
+    obj="$(jq -c --argjson v "$arr" '.teams = $v' <<<"$obj")"
+  fi
+
+  echo "$obj"
 }
 
-# labels: write EVERY label on the repo into the file (replaces `.labels`).
-_export_section_array() {
-  # _export_section_array KEY JSON-ARRAY — splice a JSON array under top-level KEY.
-  local key="$1" arr="$2" tmp
-  tmp="$(mktemp --suffix=.yml)"
-  echo "$arr" | yq -P "{\"$key\": .}" > "$tmp"
-  yq -i ".$key = load(\"$tmp\").$key" "$SETTINGS_FILE"
-  rm -f "$tmp"
-}
-
-export_labels() {
-  log "labels (export)"
-  local arr
-  arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/labels" --jq '[.[] | {name, color, description}]')"
-  info "found $(echo "$arr" | jq 'length') label(s)"
-  if [[ "$DRY_RUN" == "true" ]]; then echo "$arr" | jq '.'; endlog; return; fi
-  _export_section_array labels "$arr"
-  info "wrote $(echo "$arr" | jq 'length') label(s)"
-  endlog
-}
-
-# collaborators: direct collaborators only (org-inherited access is not ours to
-# manage). role_name normalized to a PUT-compatible permission so apply round-trips.
-export_collaborators() {
-  log "collaborators (export)"
-  local arr
-  arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/collaborators?affiliation=direct" \
-    --jq '[.[] | {username: .login, permission: (.role_name // "push")}]')"
-  arr="$(echo "$arr" | jq 'map(.permission |= ({"read":"pull","write":"push"}[.] // .))')"
-  info "found $(echo "$arr" | jq 'length') direct collaborator(s)"
-  if [[ "$DRY_RUN" == "true" ]]; then echo "$arr" | jq '.'; endlog; return; fi
-  _export_section_array collaborators "$arr"
-  info "wrote $(echo "$arr" | jq 'length') collaborator(s)"
-  endlog
-}
-
-# teams: teams with direct repo access. `name` is the team slug (the merger's
-# identity key for teams). permission normalized like collaborators.
-export_teams() {
-  log "teams (export)"
-  local arr
-  arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/teams" \
-    --jq '[.[] | {name: .slug, permission: (.permission // "push")}]')"
-  arr="$(echo "$arr" | jq 'map(.permission |= ({"read":"pull","write":"push"}[.] // .))')"
-  info "found $(echo "$arr" | jq 'length') team(s)"
-  if [[ "$DRY_RUN" == "true" ]]; then echo "$arr" | jq '.'; endlog; return; fi
-  _export_section_array teams "$arr"
-  info "wrote $(echo "$arr" | jq 'length') team(s)"
-  endlog
+_ensure_ruamel() {
+  python3 -c 'import ruamel.yaml' 2>/dev/null && return 0
+  info "installing ruamel.yaml..."
+  python3 -m pip install --quiet --disable-pip-version-check ruamel.yaml >/dev/null 2>&1 \
+    || python3 -m pip install --quiet --break-system-packages ruamel.yaml >/dev/null 2>&1 \
+    || { echo "::error::failed to install ruamel.yaml (needed for export merge)"; return 1; }
 }
 
 run_export() {
   echo "Exporting $OWNER/$REPO live state into $SETTINGS_FILE (dry-run=$DRY_RUN, sections=$SECTIONS)"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  local before after
-  before="$(sha256sum "$SETTINGS_FILE" | cut -d' ' -f1)"
+  _ensure_ruamel
 
-  if want_section "repository";    then export_repository;    fi
-  if want_section "rulesets";      then export_rulesets;      fi
-  if want_section "labels";        then export_labels;        fi
-  if want_section "collaborators"; then export_collaborators; fi
-  if want_section "teams";         then export_teams;         fi
+  log "build live source"
+  local source_json
+  source_json="$(build_export_source)"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "$source_json" | jq '.'
+  fi
+  endlog
 
-  after="$(sha256sum "$SETTINGS_FILE" | cut -d' ' -f1)"
-  if [[ "$before" == "$after" ]]; then CHANGED="false"; else CHANGED="true"; fi
+  log "merge into $SETTINGS_FILE"
+  local write_flag="" out
+  [[ "$DRY_RUN" == "true" ]] || write_flag="--write"
+  out="$(echo "$source_json" | python3 "$script_dir/merge_live.py" --file "$SETTINGS_FILE" $write_flag)"
+  echo "$out"
+  CHANGED="false"
+  [[ "$out" == *"changed=true"* ]] && CHANGED="true"
+  endlog
 
   summary="$(jq -nc --arg changed "$CHANGED" --arg sections "$SECTIONS" \
     '{mode: "export", changed: $changed, sections: ($sections | split(","))}')"
@@ -478,7 +432,7 @@ run_export() {
     echo "- **changed**: \`$CHANGED\`"
     echo "- **sections**: \`$SECTIONS\`"
     echo
-    echo "Target: \`$SETTINGS_FILE\` · Dry run: \`$DRY_RUN\`"
+    echo "Target: \`$SETTINGS_FILE\` · Dry run: \`$DRY_RUN\` (merge is additive — the file is never narrowed)"
   } >> "$GITHUB_STEP_SUMMARY"
 }
 

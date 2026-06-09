@@ -33,15 +33,24 @@ The action does **not** do any templating or placeholder substitution on `settin
 
 ## Reverse sync (`mode: export`)
 
-`mode: export` flips the direction: instead of pushing the YAML to the repo, it reads the repo's live state from the API and writes it **back** into `settings-file`, then reports whether the file changed via the `changed` output. This lets a workflow capture changes made directly in the GitHub UI back into source control instead of letting them drift.
+`mode: export` flips the direction: instead of pushing the YAML to the repo, it reads the repo's live state from the API and **deep-merges it into** `settings-file`, then reports whether the file changed via the `changed` output. It lets a workflow capture changes made directly in the GitHub UI back into source control instead of letting them drift.
 
-- **`rulesets`** → lists `/repos/{owner}/{repo}/rulesets`, fetches each, normalizes to the file's shape (`name`, `target`, `enforcement`, `conditions`, `bypass_actors`, `rules`), and replaces the `.rulesets` array wholesale.
-- **`repository`** → reads `/repos/{owner}/{repo}` and updates **only the keys already present** in the file's `.repository` block (so drift on managed keys is captured without introducing keys the repo deliberately omits).
-- **`labels`** → reads **every** label on the repo (`/repos/{owner}/{repo}/labels`) and replaces `.labels` with `{ name, color, description }` entries.
-- **`collaborators`** → reads **direct** collaborators (`?affiliation=direct`; org-inherited access is left alone) and writes `{ username, permission }`, normalizing `role_name` to a PUT-compatible permission (`read`→`pull`, `write`→`push`).
-- **`teams`** → reads teams with repo access and writes `{ name, permission }` where `name` is the team slug (the merger's identity key for teams).
+The merge (`merge_live.py`, ruamel) is **additive and lossless**, so `settings-file` becomes a faithful, growing record of the repo:
 
-The rest of the file (other top-level keys, the repository keys you don't manage) is preserved. Each touched section is normalized, so inline comments inside it are dropped — fine for an auto-capture that lands as a reviewable commit/diff. Classic branch protection (the legacy `branches:` protection API) and `environments` are **not** exported.
+- The file **wins on existing scalars** — export never overwrites a value already in the file.
+- Live state only **adds what's missing**: new top-level keys, and within identity-matched list items (rulesets by `name`, rules by `type`, `bypass_actors` by `(actor_id, actor_type)`, labels by `name`, collaborators by `username`, teams by `name`) it adds missing sub-keys and list entries (e.g. a newly-added bypass actor or collaborator).
+- New list items (e.g. a ruleset created in the UI) are **appended**; **nothing already in the file is removed** — entries not yet applied to the repo survive.
+- **Comments and formatting are preserved.**
+
+Per-section live capture:
+
+- **`repository`** → the full settable key set (`has_issues`, `allow_*`, `default_branch`, `description`, `homepage`, `topics`, `private`, merge-commit settings, …; nulls dropped). No longer narrowed to keys already in the file.
+- **`rulesets`** → every ruleset, normalized to `name`/`target`/`enforcement`/`conditions`/`bypass_actors`/`rules`.
+- **`labels`** → every label as `{ name, color, description }`.
+- **`collaborators`** → **direct** collaborators (`?affiliation=direct`; org-inherited access left alone) as `{ username, permission }`, normalizing `role_name` (`read`→`pull`, `write`→`push`).
+- **`teams`** → teams with repo access as `{ name, permission }` (`name` = team slug).
+
+Classic branch protection (legacy `branches:`) and `environments` are **not** exported. The file is rewritten only when the merge actually changes content, so an up-to-date file is left untouched.
 
 ### Auto-capturing live drift
 
