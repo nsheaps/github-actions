@@ -10,16 +10,28 @@
 #                      into source control.
 #
 # Supported sections:
-#   repository  → apply:  PATCH /repos/{owner}/{repo}
-#                 export: GET   /repos/{owner}/{repo}  (managed keys only)
-#   rulesets    → apply:  POST/PUT  /repos/{owner}/{repo}/rulesets
-#                 export: GET       /repos/{owner}/{repo}/rulesets
+#   repository    → apply:  PATCH /repos/{owner}/{repo}
+#                   export: GET   /repos/{owner}/{repo}  (managed keys only)
+#   rulesets      → apply:  POST/PUT  /repos/{owner}/{repo}/rulesets
+#                   export: GET       /repos/{owner}/{repo}/rulesets
+#   labels        → apply:  POST/PATCH /repos/{owner}/{repo}/labels
+#                   export: GET        /repos/{owner}/{repo}/labels (ALL labels)
+#   collaborators → apply:  PUT /repos/{owner}/{repo}/collaborators/{user}
+#                   export: GET /repos/{owner}/{repo}/collaborators?affiliation=direct
+#   teams         → apply:  PUT /orgs/{org}/teams/{slug}/repos/{owner}/{repo}
+#                   export: GET /repos/{owner}/{repo}/teams
 #
-# Not supported (yet): labels, collaborators, teams, environments, branches.
-# Those are handled by other workflows in nsheaps/.github today. Note that
-# classic branch protection (the `branches:` section / the legacy protection
-# API) is intentionally NOT modeled — this org uses rulesets, so export
-# captures rulesets, not classic protection.
+# PRUNE BEHAVIOR: apply is currently **non-destructive for every section** — it
+# creates/updates what's in SETTINGS_FILE but never deletes rulesets/labels or
+# revokes collaborators/teams that exist on the repo but aren't listed. This
+# matches the github-label-sync (--allow-added-labels) behavior the labels
+# section replaces, and avoids auto-revoking access. TODO(prune): once export
+# is proven to capture full live state reliably, add an opt-in prune mode so
+# SETTINGS_FILE can be made authoritative per-section.
+#
+# Not modeled: environments, and classic branch protection (the `branches:`
+# section / legacy protection API) — this org uses rulesets, so export captures
+# rulesets, not classic protection.
 
 set -euo pipefail
 
@@ -29,7 +41,7 @@ set -euo pipefail
 : "${SETTINGS_FILE:=.github/settings.yml}"
 : "${DRY_RUN:=false}"
 : "${MODE:=apply}"
-: "${SECTIONS:=repository,rulesets}"
+: "${SECTIONS:=repository,rulesets,labels,collaborators,teams}"
 
 if [[ ! -f "$SETTINGS_FILE" ]]; then
   if [[ "$MODE" == "export" ]]; then
@@ -116,6 +128,14 @@ want_section() {
   local target="$1"
   [[ ",$SECTIONS," == *",$target,"* ]]
 }
+
+# URL-encode a path segment (label names can contain spaces, etc.).
+_uri() { jq -rn --arg s "$1" '$s|@uri'; }
+
+# Normalize a GitHub permission/role_name to a PUT-compatible value
+# (the collaborators/teams PUT APIs want pull/push/admin/maintain/triage;
+# the read endpoints report read/write for the first two).
+_norm_perm() { jq -rn --arg p "$1" '{"read":"pull","write":"push"}[$p] // $p'; }
 
 ###############################################################################
 # repository: PATCH /repos/{owner}/{repo}
@@ -204,6 +224,99 @@ apply_rulesets() {
 }
 
 ###############################################################################
+# labels: create/update by name. Non-destructive — extra repo labels are kept
+# (replaces github-label-sync --allow-added-labels). TODO(prune): opt-in delete.
+###############################################################################
+apply_labels() {
+  log "labels"
+  local count
+  count="$(yq '.labels | length // 0' "$SETTINGS_FILE")"
+  if [[ "$count" == "0" || "$count" == "null" ]]; then
+    info "no labels block, skipping"; endlog; return
+  fi
+
+  local existing
+  existing="$(gh api --paginate "/repos/${OWNER}/${REPO}/labels" --jq '[.[] | {name, color, description}]')"
+  info "found $(echo "$existing" | jq 'length') existing label(s)"
+
+  local i
+  for ((i=0; i<count; i++)); do
+    local name color desc name_enc cur body
+    name="$(yq -r ".labels[$i].name" "$SETTINGS_FILE")"
+    # GitHub stores colors as 6-hex with no leading '#'; tolerate either in the file.
+    color="$(yq -r ".labels[$i].color // \"\"" "$SETTINGS_FILE" | sed 's/^#//')"
+    [[ -n "$color" ]] || color="ededed"
+    desc="$(yq -r ".labels[$i].description // \"\"" "$SETTINGS_FILE")"
+    name_enc="$(_uri "$name")"
+    cur="$(echo "$existing" | jq -r --arg n "$name" '.[] | select(.name==$n) | .name // empty')"
+    body="$(jq -nc --arg c "$color" --arg d "$desc" '{color:$c, description:$d}')"
+
+    if [[ -z "$cur" ]]; then
+      info "create label: $name"
+      [[ "$DRY_RUN" == "true" ]] || \
+        api POST "/repos/${OWNER}/${REPO}/labels" "$(echo "$body" | jq --arg n "$name" '. + {name:$n}')" >/dev/null
+    else
+      info "update label: $name"
+      [[ "$DRY_RUN" == "true" ]] || \
+        api PATCH "/repos/${OWNER}/${REPO}/labels/${name_enc}" "$body" >/dev/null
+    fi
+    LABELS_APPLIED+=("$name")
+  done
+  endlog
+}
+
+###############################################################################
+# collaborators: PUT each user's permission. Non-destructive — never removes
+# collaborators absent from the file (no silent access revocation).
+# TODO(prune): opt-in removal once export is proven.
+###############################################################################
+apply_collaborators() {
+  log "collaborators"
+  local count
+  count="$(yq '.collaborators | length // 0' "$SETTINGS_FILE")"
+  if [[ "$count" == "0" || "$count" == "null" ]]; then
+    info "no collaborators block, skipping"; endlog; return
+  fi
+
+  local i
+  for ((i=0; i<count; i++)); do
+    local user perm
+    user="$(yq -r ".collaborators[$i].username" "$SETTINGS_FILE")"
+    perm="$(_norm_perm "$(yq -r ".collaborators[$i].permission // \"push\"" "$SETTINGS_FILE")")"
+    info "grant: $user → $perm"
+    [[ "$DRY_RUN" == "true" ]] || \
+      api PUT "/repos/${OWNER}/${REPO}/collaborators/$(_uri "$user")" "$(jq -nc --arg p "$perm" '{permission:$p}')" >/dev/null
+    COLLAB_APPLIED+=("$user")
+  done
+  endlog
+}
+
+###############################################################################
+# teams: PUT each team's repo permission (org endpoint). Non-destructive.
+# TODO(prune): opt-in removal once export is proven.
+###############################################################################
+apply_teams() {
+  log "teams"
+  local count
+  count="$(yq '.teams | length // 0' "$SETTINGS_FILE")"
+  if [[ "$count" == "0" || "$count" == "null" ]]; then
+    info "no teams block, skipping"; endlog; return
+  fi
+
+  local i
+  for ((i=0; i<count; i++)); do
+    local slug perm
+    slug="$(yq -r ".teams[$i].name" "$SETTINGS_FILE")"
+    perm="$(_norm_perm "$(yq -r ".teams[$i].permission // \"push\"" "$SETTINGS_FILE")")"
+    info "grant team: $slug → $perm"
+    [[ "$DRY_RUN" == "true" ]] || \
+      api PUT "/orgs/${OWNER}/teams/$(_uri "$slug")/repos/${OWNER}/${REPO}" "$(jq -nc --arg p "$perm" '{permission:$p}')" >/dev/null
+    TEAMS_APPLIED+=("$slug")
+  done
+  endlog
+}
+
+###############################################################################
 # export: write the repo's live state back into SETTINGS_FILE.
 #
 # `yq` here is guaranteed to be mikefarah/yq (the wrapping action.yml installs
@@ -285,14 +398,68 @@ export_rulesets() {
   endlog
 }
 
+# labels: write EVERY label on the repo into the file (replaces `.labels`).
+_export_section_array() {
+  # _export_section_array KEY JSON-ARRAY — splice a JSON array under top-level KEY.
+  local key="$1" arr="$2" tmp
+  tmp="$(mktemp --suffix=.yml)"
+  echo "$arr" | yq -P "{\"$key\": .}" > "$tmp"
+  yq -i ".$key = load(\"$tmp\").$key" "$SETTINGS_FILE"
+  rm -f "$tmp"
+}
+
+export_labels() {
+  log "labels (export)"
+  local arr
+  arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/labels" --jq '[.[] | {name, color, description}]')"
+  info "found $(echo "$arr" | jq 'length') label(s)"
+  if [[ "$DRY_RUN" == "true" ]]; then echo "$arr" | jq '.'; endlog; return; fi
+  _export_section_array labels "$arr"
+  info "wrote $(echo "$arr" | jq 'length') label(s)"
+  endlog
+}
+
+# collaborators: direct collaborators only (org-inherited access is not ours to
+# manage). role_name normalized to a PUT-compatible permission so apply round-trips.
+export_collaborators() {
+  log "collaborators (export)"
+  local arr
+  arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/collaborators?affiliation=direct" \
+    --jq '[.[] | {username: .login, permission: (.role_name // "push")}]')"
+  arr="$(echo "$arr" | jq 'map(.permission |= ({"read":"pull","write":"push"}[.] // .))')"
+  info "found $(echo "$arr" | jq 'length') direct collaborator(s)"
+  if [[ "$DRY_RUN" == "true" ]]; then echo "$arr" | jq '.'; endlog; return; fi
+  _export_section_array collaborators "$arr"
+  info "wrote $(echo "$arr" | jq 'length') collaborator(s)"
+  endlog
+}
+
+# teams: teams with direct repo access. `name` is the team slug (the merger's
+# identity key for teams). permission normalized like collaborators.
+export_teams() {
+  log "teams (export)"
+  local arr
+  arr="$(gh api --paginate "/repos/${OWNER}/${REPO}/teams" \
+    --jq '[.[] | {name: .slug, permission: (.permission // "push")}]')"
+  arr="$(echo "$arr" | jq 'map(.permission |= ({"read":"pull","write":"push"}[.] // .))')"
+  info "found $(echo "$arr" | jq 'length') team(s)"
+  if [[ "$DRY_RUN" == "true" ]]; then echo "$arr" | jq '.'; endlog; return; fi
+  _export_section_array teams "$arr"
+  info "wrote $(echo "$arr" | jq 'length') team(s)"
+  endlog
+}
+
 run_export() {
   echo "Exporting $OWNER/$REPO live state into $SETTINGS_FILE (dry-run=$DRY_RUN, sections=$SECTIONS)"
 
   local before after
   before="$(sha256sum "$SETTINGS_FILE" | cut -d' ' -f1)"
 
-  if want_section "repository"; then export_repository; fi
-  if want_section "rulesets";  then export_rulesets;  fi
+  if want_section "repository";    then export_repository;    fi
+  if want_section "rulesets";      then export_rulesets;      fi
+  if want_section "labels";        then export_labels;        fi
+  if want_section "collaborators"; then export_collaborators; fi
+  if want_section "teams";         then export_teams;         fi
 
   after="$(sha256sum "$SETTINGS_FILE" | cut -d' ' -f1)"
   if [[ "$before" == "$after" ]]; then CHANGED="false"; else CHANGED="true"; fi
@@ -326,17 +493,18 @@ fi
 CREATED=()
 UPDATED=()
 UNCHANGED=()
+LABELS_APPLIED=()
+COLLAB_APPLIED=()
+TEAMS_APPLIED=()
 REPO_CHANGED="false"
 
 echo "Applying $SETTINGS_FILE to $OWNER/$REPO (dry-run=$DRY_RUN, sections=$SECTIONS)"
 
-if want_section "repository"; then
-  apply_repository
-fi
-
-if want_section "rulesets"; then
-  apply_rulesets
-fi
+if want_section "repository";    then apply_repository;    fi
+if want_section "rulesets";      then apply_rulesets;      fi
+if want_section "labels";        then apply_labels;        fi
+if want_section "collaborators"; then apply_collaborators; fi
+if want_section "teams";         then apply_teams;         fi
 
 # Summary
 summary="$(jq -nc \
@@ -344,7 +512,10 @@ summary="$(jq -nc \
   --argjson created  "$(printf '%s\n' "${CREATED[@]:-}"  | jq -R . | jq -s 'map(select(length>0))')" \
   --argjson updated  "$(printf '%s\n' "${UPDATED[@]:-}"  | jq -R . | jq -s 'map(select(length>0))')" \
   --argjson unchanged "$(printf '%s\n' "${UNCHANGED[@]:-}" | jq -R . | jq -s 'map(select(length>0))')" \
-  '{repository: $repo_changed, rulesets_created: $created, rulesets_updated: $updated, rulesets_unchanged: $unchanged}'
+  --argjson labels "${#LABELS_APPLIED[@]}" \
+  --argjson collaborators "${#COLLAB_APPLIED[@]}" \
+  --argjson teams "${#TEAMS_APPLIED[@]}" \
+  '{repository: $repo_changed, rulesets_created: $created, rulesets_updated: $updated, rulesets_unchanged: $unchanged, labels_applied: $labels, collaborators_applied: $collaborators, teams_applied: $teams}'
 )"
 
 echo "Summary: $summary"
@@ -358,6 +529,9 @@ echo "summary=$summary" >> "$GITHUB_OUTPUT"
   echo "- **rulesets created**: ${#CREATED[@]}${CREATED:+: ${CREATED[*]}}"
   echo "- **rulesets updated**: ${#UPDATED[@]}${UPDATED:+: ${UPDATED[*]}}"
   echo "- **rulesets unchanged**: ${#UNCHANGED[@]}${UNCHANGED:+: ${UNCHANGED[*]}}"
+  echo "- **labels applied**: ${#LABELS_APPLIED[@]}"
+  echo "- **collaborators applied**: ${#COLLAB_APPLIED[@]}"
+  echo "- **teams applied**: ${#TEAMS_APPLIED[@]}"
   echo
   echo "Source: \`$SETTINGS_FILE\` · Dry run: \`$DRY_RUN\` · Sections: \`$SECTIONS\`"
 } >> "$GITHUB_STEP_SUMMARY"

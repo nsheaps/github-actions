@@ -42,13 +42,13 @@ inputs:
     default: 'apply'
 
   sections:
-    description: 'Comma-separated list of top-level keys to sync. Defaults to "repository,rulesets". Add others (labels, collaborators, teams) as we extend support.'
+    description: 'Comma-separated list of top-level keys to sync. Supported: repository, rulesets, labels, collaborators, teams. Apply is non-destructive (never deletes/revokes) for every section.'
     required: false
-    default: 'repository,rulesets'
+    default: 'repository,rulesets,labels,collaborators,teams'
 
 outputs:
   summary:
-    description: 'JSON summary of changes. In apply mode keys are: repository, rulesets_created, rulesets_updated, rulesets_unchanged. In export mode: mode, changed, sections.'
+    description: 'JSON summary of changes. In apply mode keys are: repository, rulesets_created, rulesets_updated, rulesets_unchanged, labels_applied, collaborators_applied, teams_applied. In export mode: mode, changed, sections.'
     value: ${{ steps.apply.outputs.summary }}
 
   changed:
