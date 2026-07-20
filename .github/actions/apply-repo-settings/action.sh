@@ -3,10 +3,12 @@
 # top-level sections to {OWNER}/{REPO} via the GitHub API.
 #
 # Supported sections:
-#   repository  → PATCH /repos/{owner}/{repo}
-#   rulesets    → POST/PUT/DELETE /repos/{owner}/{repo}/rulesets
+#   repository     → PATCH /repos/{owner}/{repo}
+#   rulesets       → POST/PUT/DELETE /repos/{owner}/{repo}/rulesets
+#   collaborators  → PUT /repos/{owner}/{repo}/collaborators/{username}
+#                    (opt-in only, see SECTIONS default below)
 #
-# Not supported (yet): labels, collaborators, teams, environments, branches.
+# Not supported (yet): labels, teams, environments, branches.
 # Those are handled by other workflows in nsheaps/.github today.
 
 set -euo pipefail
@@ -185,11 +187,67 @@ apply_rulesets() {
 }
 
 ###############################################################################
+# collaborators: for each {username, permission} entry, PUT to add/update
+# their access. We do NOT remove collaborators absent from the list (same
+# non-destructive philosophy as rulesets — this action never revokes access
+# it didn't explicitly grant here).
+#
+# Opt-in only: unlike repository/rulesets, this is not in SECTIONS' default.
+# Granting repo access to a user is a higher-consequence action than a
+# ruleset tweak, so a repo must explicitly add "collaborators" to its
+# `sections` input even if its settings.yml already has a collaborators:
+# block (e.g. merged in via the nsheaps/.github sync layer).
+###############################################################################
+apply_collaborators() {
+  log "collaborators"
+
+  local count
+  count="$(yq '.collaborators | length // 0' "$SETTINGS_FILE")"
+  if [[ "$count" == "0" || "$count" == "null" ]]; then
+    info "no collaborators block, skipping"
+    endlog
+    return
+  fi
+
+  local i
+  for ((i = 0; i < count; i++)); do
+    local username permission body
+    username="$(yq -r ".collaborators[$i].username" "$SETTINGS_FILE")"
+    permission="$(yq -r ".collaborators[$i].permission" "$SETTINGS_FILE")"
+
+    if [[ -z "$username" || "$username" == "null" ]]; then
+      echo "::error file=$SETTINGS_FILE::collaborators[$i] is missing required 'username'" >&2
+      exit 1
+    fi
+    if [[ -z "$permission" || "$permission" == "null" ]]; then
+      echo "::error file=$SETTINGS_FILE::collaborators[$i] (username=$username) is missing required 'permission'" >&2
+      exit 1
+    fi
+
+    body="$(jq -nc --arg permission "$permission" '{permission: $permission}')"
+
+    info "add/update: $username ($permission)"
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo "$body" | jq '.'
+    else
+      # A 403 here most likely means the token/app lacks Administration:write
+      # on this repo — the `api` helper already annotates the HTTP status and
+      # response body, and `set -e` stops the run rather than continuing silently.
+      api PUT "/repos/${OWNER}/${REPO}/collaborators/${username}" "$body" >/dev/null
+    fi
+    APPLIED+=("$username")
+  done
+
+  endlog
+}
+
+###############################################################################
 # main
 ###############################################################################
 CREATED=()
 UPDATED=()
 UNCHANGED=()
+APPLIED=()
 REPO_CHANGED="false"
 
 echo "Applying $SETTINGS_FILE to $OWNER/$REPO (dry-run=$DRY_RUN, sections=$SECTIONS)"
@@ -202,13 +260,18 @@ if want_section "rulesets"; then
   apply_rulesets
 fi
 
+if want_section "collaborators"; then
+  apply_collaborators
+fi
+
 # Summary
 summary="$(jq -nc \
   --arg repo_changed "$REPO_CHANGED" \
   --argjson created  "$(printf '%s\n' "${CREATED[@]:-}"  | jq -R . | jq -s 'map(select(length>0))')" \
   --argjson updated  "$(printf '%s\n' "${UPDATED[@]:-}"  | jq -R . | jq -s 'map(select(length>0))')" \
   --argjson unchanged "$(printf '%s\n' "${UNCHANGED[@]:-}" | jq -R . | jq -s 'map(select(length>0))')" \
-  '{repository: $repo_changed, rulesets_created: $created, rulesets_updated: $updated, rulesets_unchanged: $unchanged}'
+  --argjson collaborators_applied "$(printf '%s\n' "${APPLIED[@]:-}" | jq -R . | jq -s 'map(select(length>0))')" \
+  '{repository: $repo_changed, rulesets_created: $created, rulesets_updated: $updated, rulesets_unchanged: $unchanged, collaborators_applied: $collaborators_applied}'
 )"
 
 echo "Summary: $summary"
@@ -222,6 +285,7 @@ echo "summary=$summary" >> "$GITHUB_OUTPUT"
   echo "- **rulesets created**: ${#CREATED[@]}${CREATED:+: ${CREATED[*]}}"
   echo "- **rulesets updated**: ${#UPDATED[@]}${UPDATED:+: ${UPDATED[*]}}"
   echo "- **rulesets unchanged**: ${#UNCHANGED[@]}${UNCHANGED:+: ${UNCHANGED[*]}}"
+  echo "- **collaborators applied**: ${#APPLIED[@]}${APPLIED:+: ${APPLIED[*]}}"
   echo
   echo "Source: \`$SETTINGS_FILE\` · Dry run: \`$DRY_RUN\` · Sections: \`$SECTIONS\`"
 } >> "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,5 @@
 name: 'Apply Repo Settings'
-description: 'Read .github/settings.yml and apply repository config + rulesets to a repo via the GitHub API. A minimal ephemeral alternative to the repository-settings GitHub App (https://github.com/repository-settings/app), suitable for running inside a workflow.'
+description: 'Read .github/settings.yml and apply repository config, rulesets, and (opt-in) collaborators to a repo via the GitHub API. A minimal ephemeral alternative to the repository-settings GitHub App (https://github.com/repository-settings/app), suitable for running inside a workflow.'
 
 branding:
   icon: 'sliders'
@@ -31,13 +31,13 @@ inputs:
     default: 'false'
 
   sections:
-    description: 'Comma-separated list of top-level keys to apply. Defaults to "repository,rulesets". Add others (labels, collaborators, teams) as we extend support.'
+    description: 'Comma-separated list of top-level keys to apply. Defaults to "repository,rulesets". "collaborators" is supported but opt-in only — add it explicitly (e.g. "repository,rulesets,collaborators") since granting repo access is higher-consequence than a ruleset tweak. Add others (labels, teams) as we extend support.'
     required: false
     default: 'repository,rulesets'
 
 outputs:
   summary:
-    description: 'JSON summary of changes applied. Keys: repository, rulesets_created, rulesets_updated, rulesets_unchanged.'
+    description: 'JSON summary of changes applied. Keys: repository, rulesets_created, rulesets_updated, rulesets_unchanged, collaborators_applied.'
     value: ${{ steps.apply.outputs.summary }}
 
 runs:
