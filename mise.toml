@@ -17,3 +17,6 @@ checkov = "latest"
 grype = "latest"
 gitleaks = "latest"
 
+# Test tools (mikefarah's yq — same one apply-repo-settings/action.sh requires at runtime)
+"aqua:mikefarah/yq" = "latest"
+
