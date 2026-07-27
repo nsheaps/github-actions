@@ -161,11 +161,21 @@ apply_rulesets() {
       CREATED+=("$name")
     else
       # Compare current vs desired to decide if PUT is needed.
+      #
+      # `jq -S` only sorts object KEYS — it leaves array ELEMENT ORDER alone.
+      # GitHub doesn't guarantee bypass_actors[] comes back in the same order
+      # settings.yml declares them in, so a plain `-S` comparison flags a
+      # permanent false "needs update" for rulesets whose actual bypass_actors
+      # set is identical but differently ordered. Sort bypass_actors by a
+      # stable key (actor_type, actor_id) on both sides before the `-S`
+      # comparison so ordering differences don't register as drift.
+      local ruleset_filter='{name, target, enforcement, conditions, rules,
+        bypass_actors: ((.bypass_actors // []) | sort_by(.actor_type, .actor_id))}'
       local current_norm desired_norm
       current_norm="$(gh api "/repos/${OWNER}/${REPO}/rulesets/${existing_id}" \
-        --jq '{name, target, enforcement, conditions, rules, bypass_actors}' \
+        --jq "$ruleset_filter" \
         | jq -S '.')"
-      desired_norm="$(echo "$body" | jq -S '{name, target, enforcement, conditions, rules, bypass_actors}')"
+      desired_norm="$(echo "$body" | jq -S "$ruleset_filter")"
       if [[ "$current_norm" == "$desired_norm" ]]; then
         info "unchanged: $name (id=$existing_id)"
         UNCHANGED+=("$name")
