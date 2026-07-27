@@ -169,7 +169,27 @@ apply_rulesets() {
       # set is identical but differently ordered. Sort bypass_actors by a
       # stable key (actor_type, actor_id) on both sides before the `-S`
       # comparison so ordering differences don't register as drift.
-      local ruleset_filter='{name, target, enforcement, conditions, rules,
+      #
+      # GitHub also backfills two `pull_request` rule parameters that
+      # settings.yml treats as optional and often omits: `allowed_merge_methods`
+      # (all three methods — merge, squash, rebase — regardless of what the
+      # repo itself allows; confirmed empirically against repos with
+      # allow_merge_commit:false that still get "merge" back) and
+      # `required_reviewers` (empty array). Neither default is stated in
+      # GitHub's OpenAPI schema or REST docs, so these are pinned from direct
+      # observation (nsheaps/greasemonkey-scripts + nsheaps/.github's own
+      # require-pr rulesets), not assumption. Backfill them on both sides
+      # only when actually absent (`// default`, not overwriting a real,
+      # explicitly-set value on either side) so a genuine future difference
+      # still registers as drift.
+      local ruleset_filter='{name, target, enforcement,
+        conditions,
+        rules: (.rules // [] | map(
+          if .type == "pull_request" then
+            .parameters.allowed_merge_methods |= (. // ["merge", "squash", "rebase"])
+            | .parameters.required_reviewers |= (. // [])
+          else . end
+        )),
         bypass_actors: ((.bypass_actors // []) | sort_by(.actor_type, .actor_id))}'
       local current_norm desired_norm
       current_norm="$(gh api "/repos/${OWNER}/${REPO}/rulesets/${existing_id}" \
