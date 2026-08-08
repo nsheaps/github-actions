@@ -1,0 +1,43 @@
+# This file pairs with .claude/settings.json (which enables the plugins) and
+# tells each plugin how to behave for this repo. It is read by the ai-mktpl
+# plugins' SessionStart hooks; see the per-plugin SKILL.md. Modelled on
+# nsheaps/.github's config.
+#
+# This wires up GitHub auth for Claude Code web sessions: the 1pass plugin
+# resolves the Agent-Jack vault items into env vars (GITHUB_APP_ID /
+# GITHUB_INSTALLATION_ID / GITHUB_APP_PRIVATE_KEY) via the OP service-account
+# token provisioned for the session, and the github-app plugin exchanges those
+# for an installation token and configures git — so pushes work without relying
+# on an ephemeral session proxy. Flip the vault name in `1pass.opExec.items`
+# and `github-app.ref` to operate as a different agent.
+
+1pass:
+  opExec:
+    items:
+      - 'op://Agent-Jack/ENVIRONMENT'
+      - 'op://Agent-Jack/github--app--jack'
+    targets:
+      # envLocal: writes $AGENT_HOME_DIR/.env.local (sourced via .envrc in agent
+      # launches). sessionStartBashEnv: appends `export` lines into
+      # $CLAUDE_ENV_FILE so the github-app plugin's SessionStart hook sees the
+      # GITHUB_APP_* vars without needing a prior shell session.
+      - envLocal
+      - sessionStartBashEnv
+    recursiveResolve: true
+
+github-app:
+  ref: 'op://Agent-Jack/github--app--jack'
+  autoGitConfig: true
+
+github:
+  autoInstall: false
+
+mise:
+  autoInstallTools: true
+  autoTrust: true
+
+# Operated directly via Claude Code on web, not by an autonomous agent — disable
+# task-utils' in-progress-task gate so writes aren't blocked.
+task-utils:
+  enabled: false
+  requireInProgress: false
