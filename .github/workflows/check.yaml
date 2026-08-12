@@ -83,6 +83,23 @@ jobs:
           echo "Formatting changes were auto-committed. Re-running CI."
           exit 1
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        with:
+          install_args: 'aqua:mikefarah/yq'
+
+      - name: Run tests
+        run: mise run test
+
   security:
     name: Security
     runs-on: ubuntu-latest

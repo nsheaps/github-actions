@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Run action test scripts (composite actions have no shared test framework yet — each ships its own test.sh)"
+set -euo pipefail
+
+status=0
+while IFS= read -r -d '' test_script; do
+  echo "::group::$test_script"
+  if ! "$test_script"; then
+    status=1
+  fi
+  echo "::endgroup::"
+done < <(find .github/actions -maxdepth 2 -name 'test.sh' -print0 | sort -z)
+
+exit "$status"
