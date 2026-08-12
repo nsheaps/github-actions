@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Skill",
+      "Glob",
+      "Grep",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(gh pr:*)",
+      "Bash(mise:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "agent-utils@agents": true,
+    "agent-tab-titles@nsheaps-claude-plugins": true,
+    "shared-lib@ai-mktpl": true,
+    "1pass@ai-mktpl": true,
+    "github-app@ai-mktpl": true,
+    "mise@ai-mktpl": true
+  },
+  "extraKnownMarketplaces": {
+    "agents": {
+      "source": {
+        "source": "github",
+        "repo": "nsheaps/agents"
+      }
+    },
+    "ai-mktpl": {
+      "source": {
+        "source": "github",
+        "repo": "nsheaps/ai-mktpl"
+      }
+    }
+  }
+}
