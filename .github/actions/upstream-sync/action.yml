@@ -1,0 +1,232 @@
+name: 'Upstream Sync'
+description: 'Sync branches from an upstream repository, handling fast-forwards, divergence, and new branches.'
+
+branding:
+  icon: 'refresh-cw'
+  color: 'blue'
+
+inputs:
+  upstream-repo:
+    description: 'Upstream repository in owner/name format (e.g. instructkr/claw-code)'
+    required: true
+
+  token:
+    description: 'GitHub token with contents:write permission for pushing to origin'
+    required: true
+
+  dry-run:
+    description: 'Dry run (log only, do not push)'
+    required: false
+    default: 'false'
+
+outputs:
+  synced-branches:
+    description: 'Space-separated list of branches that were fast-forward synced'
+    value: ${{ steps.sync.outputs.synced_branches }}
+
+  conflict-branches:
+    description: 'Space-separated list of branches that diverged and were force-reset to upstream'
+    value: ${{ steps.sync.outputs.conflict_branches }}
+
+  backed-up-branches:
+    description: 'Space-separated list of branch:backup pairs that were backed up before force-reset'
+    value: ${{ steps.sync.outputs.backed_up_branches }}
+
+  new-branches:
+    description: 'Space-separated list of new branches created from upstream'
+    value: ${{ steps.sync.outputs.new_branches }}
+
+  skipped-branches:
+    description: 'Space-separated list of branches already up to date'
+    value: ${{ steps.sync.outputs.skipped_branches }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure git push credentials
+      shell: bash
+      run: |
+        git remote set-url origin "https://x-access-token:${{ inputs.token }}@github.com/${{ github.repository }}.git"
+
+    - name: Add upstream remote
+      shell: bash
+      run: |
+        if ! git remote get-url upstream 2>/dev/null; then
+          git remote add upstream "https://github.com/${{ inputs.upstream-repo }}.git"
+          echo "Added upstream remote: ${{ inputs.upstream-repo }}"
+        else
+          git remote set-url upstream "https://github.com/${{ inputs.upstream-repo }}.git"
+          echo "Updated upstream remote URL"
+        fi
+
+    - name: Fetch all branches
+      shell: bash
+      run: |
+        git fetch --prune upstream
+        git fetch --prune origin
+        echo "Fetched all branches from upstream and origin"
+
+    - name: Sync branches
+      id: sync
+      shell: bash
+      env:
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+
+        DATE=$(date +%Y%m%d)
+        SYNCED_BRANCHES=""
+        CONFLICT_BRANCHES=""
+        BACKED_UP_BRANCHES=""
+        NEW_BRANCHES=""
+        SKIPPED_BRANCHES=""
+
+        # Get list of upstream branches (strip remote prefix and whitespace)
+        UPSTREAM_BRANCHES=$(git branch -r | grep '^  upstream/' | sed 's|^  upstream/||')
+
+        echo "=== Upstream branches to sync ==="
+        echo "$UPSTREAM_BRANCHES"
+        echo ""
+
+        while IFS= read -r BRANCH; do
+          # Skip HEAD pointer
+          if [ "$BRANCH" = "HEAD" ]; then
+            continue
+          fi
+
+          echo "--- Processing branch: ${BRANCH} ---"
+
+          UPSTREAM_REF="upstream/${BRANCH}"
+          UPSTREAM_SHA=$(git rev-parse "${UPSTREAM_REF}")
+          SHORT_SHA=$(git rev-parse --short "${UPSTREAM_REF}")
+
+          # Check if branch exists on origin
+          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" 2>/dev/null; then
+            LOCAL_SHA=$(git rev-parse "origin/${BRANCH}")
+
+            # Check if they're already in sync
+            if [ "$LOCAL_SHA" = "$UPSTREAM_SHA" ]; then
+              echo "  [SKIP] ${BRANCH} is already up to date"
+              SKIPPED_BRANCHES="${SKIPPED_BRANCHES} ${BRANCH}"
+              continue
+            fi
+
+            # Check ancestry: is our local HEAD an ancestor of upstream's HEAD?
+            # YES → upstream simply has new commits (fast-forward merge is safe)
+            # NO  → upstream diverged from our history (force-push or rebase detected)
+            if git merge-base --is-ancestor "${LOCAL_SHA}" "${UPSTREAM_SHA}" 2>/dev/null; then
+              echo "  [MERGE] ${BRANCH}: local is ancestor of upstream — fast-forward"
+
+              git checkout -B "${BRANCH}" "origin/${BRANCH}"
+
+              if [ "${DRY_RUN}" = "true" ]; then
+                echo "  [DRY RUN] Would fast-forward ${BRANCH} to ${UPSTREAM_REF}"
+              else
+                git merge --ff-only "${UPSTREAM_REF}"
+                git push origin "${BRANCH}"
+                echo "  [OK] Pushed ${BRANCH} (fast-forward)"
+                SYNCED_BRANCHES="${SYNCED_BRANCHES} ${BRANCH}"
+              fi
+            else
+              # Upstream diverged — force-push or rebase detected.
+              # Back up our current state before any destructive action.
+              BACKUP_BRANCH="backup/${BRANCH}/${DATE}-${SHORT_SHA}"
+              echo "  [DIVERGE] ${BRANCH}: upstream diverged from origin/${BRANCH}"
+              echo "  Creating backup branch: ${BACKUP_BRANCH}"
+
+              if [ "${DRY_RUN}" = "true" ]; then
+                echo "  [DRY RUN] Would create backup ${BACKUP_BRANCH} and force-reset ${BRANCH} to ${UPSTREAM_REF}"
+              else
+                # Push backup of our current state
+                git push origin "origin/${BRANCH}:refs/heads/${BACKUP_BRANCH}"
+                echo "  [OK] Backup pushed: ${BACKUP_BRANCH}"
+
+                # Reset our branch to match upstream exactly
+                git checkout -B "${BRANCH}" "${UPSTREAM_REF}"
+                git push --force-with-lease origin "${BRANCH}"
+                echo "  [OK] Force-reset ${BRANCH} to ${UPSTREAM_REF}"
+
+                BACKED_UP_BRANCHES="${BACKED_UP_BRANCHES} ${BRANCH}:${BACKUP_BRANCH}"
+                CONFLICT_BRANCHES="${CONFLICT_BRANCHES} ${BRANCH}"
+              fi
+            fi
+          else
+            # Branch exists upstream but not on origin — create it
+            echo "  [NEW] ${BRANCH} does not exist on origin — creating"
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "  [DRY RUN] Would create ${BRANCH} from ${UPSTREAM_REF}"
+            else
+              git checkout -B "${BRANCH}" "${UPSTREAM_REF}"
+              git push origin "${BRANCH}"
+              echo "  [OK] Created and pushed new branch: ${BRANCH}"
+              NEW_BRANCHES="${NEW_BRANCHES} ${BRANCH}"
+            fi
+          fi
+        done <<< "$UPSTREAM_BRANCHES"
+
+        echo ""
+        echo "=== Sync complete ==="
+
+        # Write outputs (trim leading spaces)
+        echo "synced_branches=${SYNCED_BRANCHES# }" >> "$GITHUB_OUTPUT"
+        echo "conflict_branches=${CONFLICT_BRANCHES# }" >> "$GITHUB_OUTPUT"
+        echo "backed_up_branches=${BACKED_UP_BRANCHES# }" >> "$GITHUB_OUTPUT"
+        echo "new_branches=${NEW_BRANCHES# }" >> "$GITHUB_OUTPUT"
+        echo "skipped_branches=${SKIPPED_BRANCHES# }" >> "$GITHUB_OUTPUT"
+
+    - name: Write job summary
+      if: always()
+      shell: bash
+      env:
+        SYNCED: ${{ steps.sync.outputs.synced_branches }}
+        NEW: ${{ steps.sync.outputs.new_branches }}
+        CONFLICTS: ${{ steps.sync.outputs.conflict_branches }}
+        BACKUPS: ${{ steps.sync.outputs.backed_up_branches }}
+        SKIPPED: ${{ steps.sync.outputs.skipped_branches }}
+      run: |
+        {
+          echo "## Upstream Sync Summary"
+          echo ""
+          echo "**Upstream:** \`${{ inputs.upstream-repo }}\`"
+          echo "**Run at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "**Dry run:** ${{ inputs.dry-run }}"
+          echo ""
+
+          if [ -n "$SYNCED" ]; then
+            echo "### ✅ Synced (fast-forward)"
+            for b in $SYNCED; do echo "- \`$b\`"; done
+            echo ""
+          fi
+
+          if [ -n "$NEW" ]; then
+            echo "### 🆕 New branches created"
+            for b in $NEW; do echo "- \`$b\`"; done
+            echo ""
+          fi
+
+          if [ -n "$CONFLICTS" ]; then
+            echo "### ⚠️ Divergence detected (backed up + force-reset to upstream)"
+            for b in $CONFLICTS; do echo "- \`$b\`"; done
+            echo ""
+          fi
+
+          if [ -n "$BACKUPS" ]; then
+            echo "### 💾 Backup branches created"
+            for entry in $BACKUPS; do
+              ORIG="${entry%%:*}"
+              BACKUP="${entry##*:}"
+              echo "- \`$ORIG\` → \`$BACKUP\`"
+            done
+            echo ""
+          fi
+
+          if [ -n "$SKIPPED" ]; then
+            echo "### ℹ️ Already up to date (skipped)"
+            for b in $SKIPPED; do echo "- \`$b\`"; done
+            echo ""
+          fi
+
+          if [ -z "${SYNCED}${NEW}${CONFLICTS}${SKIPPED}" ]; then
+            echo "### ℹ️ No upstream branches found or all up to date"
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
