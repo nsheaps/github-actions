@@ -30,15 +30,30 @@ inputs:
     required: false
     default: 'false'
 
-  sections:
-    description: 'Comma-separated list of top-level keys to apply. Defaults to "repository,rulesets". Add others (labels, collaborators, teams) as we extend support.'
+  mode:
+    description: |
+      Direction of the sync:
+        apply  — read settings-file and apply it to the repo (default).
+        export — read the repo's live config/rulesets from the API and write
+                 them back into settings-file (reverse sync). A calling
+                 workflow can then commit the result to capture changes made
+                 in the GitHub UI back into source control.
     required: false
-    default: 'repository,rulesets'
+    default: 'apply'
+
+  sections:
+    description: 'Comma-separated list of top-level keys to sync. Supported: repository, rulesets, labels, collaborators, teams. Apply is non-destructive (never deletes/revokes) for every section.'
+    required: false
+    default: 'repository,rulesets,labels,collaborators,teams'
 
 outputs:
   summary:
-    description: 'JSON summary of changes applied. Keys: repository, rulesets_created, rulesets_updated, rulesets_unchanged.'
+    description: 'JSON summary of changes. In apply mode keys are: repository, rulesets_created, rulesets_updated, rulesets_unchanged, labels_applied, collaborators_applied, teams_applied. In export mode: mode, changed, sections.'
     value: ${{ steps.apply.outputs.summary }}
+
+  changed:
+    description: 'In export mode: "true" if settings-file was modified, else "false". Empty in apply mode.'
+    value: ${{ steps.apply.outputs.changed }}
 
 runs:
   using: 'composite'
@@ -93,5 +108,6 @@ runs:
         REPO: ${{ inputs.repo }}
         SETTINGS_FILE: ${{ inputs.settings-file }}
         DRY_RUN: ${{ inputs.dry-run }}
+        MODE: ${{ inputs.mode }}
         SECTIONS: ${{ inputs.sections }}
       run: ${{ github.action_path }}/action.sh

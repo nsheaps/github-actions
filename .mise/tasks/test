@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Run action unit tests (apply-repo-settings merge_live)"
+set -euo pipefail
+
+echo "Installing test deps (ruamel.yaml)..."
+python3 -m pip install --quiet --disable-pip-version-check ruamel.yaml \
+  || python3 -m pip install --quiet --break-system-packages ruamel.yaml
+
+echo "Running apply-repo-settings merge_live tests..."
+python3 .github/actions/apply-repo-settings/merge_live_test.py

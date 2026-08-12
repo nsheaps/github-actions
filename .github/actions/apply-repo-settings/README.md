@@ -4,26 +4,90 @@ An ephemeral, in-workflow alternative to the [repository-settings GitHub App](ht
 
 Reads `.github/settings.yml` from the current repo and applies the supported sections to the target repo via the GitHub API, using a GitHub App token (so the action runs only when invoked — no always-on bot, no third-party service).
 
+It also runs in reverse: with `mode: export` it reads the repo's **live** state and writes it back into `settings.yml`, so manual changes made in the GitHub UI can be captured back into source control (see [Reverse sync](#reverse-sync-mode-export) below).
+
+Supported sections: `repository`, `rulesets`, `labels`, `collaborators`, `teams`. **Apply is non-destructive for every section** — it creates/updates what's listed but never deletes rulesets/labels or revokes collaborator/team access that exists on the repo but isn't in `settings.yml`. (A future opt-in prune mode will let `settings.yml` be authoritative per section.) Not modeled: `environments` and classic branch protection (`branches:`) — this org uses rulesets.
+
 ## Why not self-host the upstream app?
 
-The upstream app is a Probot webhook server — it's designed to listen for `push` events on a long-running process. Adapting it for ephemeral one-shot runs is more invasive than building a minimal applier from scratch. This action covers the two sections we actually use (`repository:` config and `rulesets:`) in ~170 lines of bash + `gh api`. Other sections (`labels`, `collaborators`, `teams`, `environments`, legacy `branches`) are not yet implemented — labels are managed via a separate sync today.
+The upstream app is a Probot webhook server — it's designed to listen for `push` events on a long-running process. Adapting it for ephemeral one-shot runs is more invasive than building a minimal applier from scratch. This action covers the sections we use in bash + `gh api`. The `labels` section **replaces** the previous `github-label-sync` flow — org-standard labels now live in the org settings template and flow through the same per-repo `settings.yml` pipeline as everything else.
 
 ## Inputs
 
-| Input           | Required | Default                | Description                                                                                                           |
-| --------------- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `token`         | yes      | —                      | GitHub token with `Administration: write` on the target repo (typically from `checkout-as-app` or `github-app-auth`). |
-| `owner`         | no       | current owner          | Target repo owner.                                                                                                    |
-| `repo`          | no       | current repo           | Target repo name.                                                                                                     |
-| `settings-file` | no       | `.github/settings.yml` | Path to the YAML to apply.                                                                                            |
-| `dry-run`       | no       | `false`                | Print what would change without applying.                                                                             |
-| `sections`      | no       | `repository,rulesets`  | Comma-separated section names to apply.                                                                               |
+| Input           | Required | Default                                          | Description                                                                                                           |
+| --------------- | -------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `token`         | yes      | —                                                | GitHub token with `Administration: write` on the target repo (typically from `checkout-as-app` or `github-app-auth`). |
+| `owner`         | no       | current owner                                    | Target repo owner.                                                                                                    |
+| `repo`          | no       | current repo                                     | Target repo name.                                                                                                     |
+| `settings-file` | no       | `.github/settings.yml`                           | Path to the YAML to apply (or write, in export mode).                                                                 |
+| `dry-run`       | no       | `false`                                          | Print what would change without applying / writing.                                                                   |
+| `mode`          | no       | `apply`                                          | `apply` (file → repo) or `export` (repo → file, reverse sync).                                                        |
+| `sections`      | no       | `repository,rulesets,labels,collaborators,teams` | Comma-separated section names to sync.                                                                                |
 
 The action does **not** do any templating or placeholder substitution on `settings-file` — it applies the YAML as-is. If you need env-var-based substitution (e.g. resolving a GitHub App ID into `bypass_actors[].actor_id`), render the file upstream (e.g. with `envsubst`) before invoking this action.
 
 ## Outputs
 
-- `summary` — JSON object: `{ repository, rulesets_created, rulesets_updated, rulesets_unchanged }`.
+- `summary` — JSON object. In `apply` mode: `{ repository, rulesets_created, rulesets_updated, rulesets_unchanged, labels_applied, collaborators_applied, teams_applied }`. In `export` mode: `{ mode, changed, sections }`.
+- `changed` — export mode only: `"true"` if `settings-file` was modified, else `"false"`. Empty in apply mode.
+
+## Reverse sync (`mode: export`)
+
+`mode: export` flips the direction: instead of pushing the YAML to the repo, it reads the repo's live state from the API and **deep-merges it into** `settings-file`, then reports whether the file changed via the `changed` output. It lets a workflow capture changes made directly in the GitHub UI back into source control instead of letting them drift.
+
+The merge (`merge_live.py`, ruamel) is **additive and lossless**, so `settings-file` becomes a faithful, growing record of the repo:
+
+- The file **wins on existing scalars** — export never overwrites a value already in the file.
+- Live state only **adds what's missing**: new top-level keys, and within identity-matched list items (rulesets by `name`, rules by `type`, `bypass_actors` by `(actor_id, actor_type)`, labels by `name`, collaborators by `username`, teams by `name`) it adds missing sub-keys and list entries (e.g. a newly-added bypass actor or collaborator).
+- New list items (e.g. a ruleset created in the UI) are **appended**; **nothing already in the file is removed** — entries not yet applied to the repo survive.
+- **Comments and formatting are preserved.**
+
+Per-section live capture:
+
+- **`repository`** → the full settable key set (`has_issues`, `allow_*`, `default_branch`, `description`, `homepage`, `topics`, `private`, merge-commit settings, …; nulls dropped). No longer narrowed to keys already in the file.
+- **`rulesets`** → every ruleset, normalized to `name`/`target`/`enforcement`/`conditions`/`bypass_actors`/`rules`.
+- **`labels`** → every label as `{ name, color, description }`.
+- **`collaborators`** → **direct** collaborators (`?affiliation=direct`; org-inherited access left alone) as `{ username, permission }`, normalizing `role_name` (`read`→`pull`, `write`→`push`).
+- **`teams`** → teams with repo access as `{ name, permission }` (`name` = team slug).
+
+Classic branch protection (legacy `branches:`) and `environments` are **not** exported. The file is rewritten only when the merge actually changes content, so an up-to-date file is left untouched.
+
+### Auto-capturing live drift
+
+Run export from a workflow, then commit whatever it captured. The canonical wiring triggers export on a push that changes the workflow file (so the captured `settings.yml` lands in the same branch/PR as a preview) and on a weekly schedule (to catch UI ruleset edits that fire no push):
+
+```yaml
+on:
+  push:
+    paths: ['.github/workflows/apply-repo-settings.yaml']
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: nsheaps/github-actions/.github/actions/checkout-as-app@main
+        id: checkout
+        with:
+          app-id: ${{ secrets.AUTOMATION_GITHUB_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_GITHUB_APP_PRIVATE_KEY }}
+      - uses: nsheaps/github-actions/.github/actions/apply-repo-settings@main
+        id: export
+        with:
+          token: ${{ steps.checkout.outputs.token }}
+          mode: export
+          sections: rulesets
+      - if: steps.export.outputs.changed == 'true'
+        run: |
+          git add .github/settings.yml
+          git commit -m "chore: sync rulesets into settings.yml"
+          git push origin "HEAD:${{ github.ref_name }}"
+```
+
+> There is no `repository_ruleset` Actions trigger, so pure UI ruleset edits (with no corresponding push) are caught by the weekly schedule. For immediate ruleset-edit-driven exports, dispatch this action from an org-level ruleset webhook via `repository_dispatch`.
+
+The full wired-up workflow (push/schedule gating + commit-back) lives at [`nsheaps/.github`'s `apply-repo-settings.yaml` template](https://github.com/nsheaps/.github/blob/main/ansible/templates/.github/workflows/apply-repo-settings.yaml).
 
 ## Setting up the GitHub App
 
@@ -85,11 +149,15 @@ jobs:
   - if no ruleset with that name exists → `POST /repos/{owner}/{repo}/rulesets`
   - if one exists and content matches → no-op (logged as `unchanged`)
   - if one exists and content differs → `PUT /repos/{owner}/{repo}/rulesets/{id}`
+- **`labels:` list** → `POST` to create, `PATCH /repos/{owner}/{repo}/labels/{name}` to update color/description.
+- **`collaborators:` list** → `PUT /repos/{owner}/{repo}/collaborators/{username}` with `{ permission }`.
+- **`teams:` list** → `PUT /orgs/{owner}/teams/{slug}/repos/{owner}/{repo}` with `{ permission }`.
 
-Rulesets that exist on the repo but are absent from the YAML are **not deleted** (safer default — repos may have UI-created rulesets we don't want to wipe). If you want destructive sync, add a `--prune` mode in a follow-up.
+**Nothing is ever deleted or revoked.** Rulesets, labels, collaborators, and teams that exist on the repo but are absent from the YAML are left untouched (safer default — repos may have UI-created rulesets/labels, and we never want to silently revoke access). A future opt-in prune mode (tracked by `TODO(prune)` markers in `action.sh`) will make `settings.yml` authoritative per section once export is proven.
 
 ## Limitations
 
 - The upstream repository-settings app reads from the default branch only. This action reads from the workflow's checkout, so it works on any branch — useful for testing changes in a PR before merging.
-- No support yet for `labels`, `collaborators`, `teams`, `environments`. Those are tracked separately.
+- `environments` and classic branch protection (`branches:`) are not supported.
+- `collaborators`/`teams` apply needs the App to have `Administration: write` (and org `Members` for teams). Export only reads.
 - `bypass_actors[].actor_id` for `RepositoryRole` must be the role's numeric ID (community-documented: 1=read, 2=triage, 3=write, 4=maintain, 5=admin). Custom roles have user-assigned IDs.
