@@ -143,7 +143,7 @@ runs:
     # ── Step 2: Checkout with app token baked into the remote URL ──
     - name: Checkout repository as GitHub App
       id: checkout
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         token: ${{ steps.auth.outputs.token }}
         repository: ${{ inputs.repository }}
